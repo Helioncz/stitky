@@ -9,6 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+_DATA_DIR = Path(os.getenv("DATA_DIR") or BASE_DIR / "data")
+
+
 def _models(raw: str) -> list[str]:
     return [m.strip() for m in raw.split(",") if m.strip()]
 
@@ -16,8 +19,9 @@ def _models(raw: str) -> list[str]:
 @dataclass(frozen=True)
 class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "dev-nebezpecny-klic-zmenit")
-    database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{(BASE_DIR / 'data' / 'app.db').as_posix()}")
-    data_dir: Path = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data")))
+    # Prázdné DATABASE_URL = SQLite vedle souborů v DATA_DIR (v Dockeru volume /data)
+    database_url: str = os.getenv("DATABASE_URL") or f"sqlite:///{(_DATA_DIR / 'app.db').as_posix()}"
+    data_dir: Path = _DATA_DIR
     public_base_url: str = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
     # Registrace nové firmy (tenantu) z přihlašovací stránky. Na ostrém provozu
     # se dá vypnout a firmy zakládat jen ručně.
