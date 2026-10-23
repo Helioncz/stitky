@@ -33,7 +33,8 @@
   <form method="post" action="/sb/{{ sb.id }}/photos" enctype="multipart/form-data" class="row">
     <input type="file" name="files" accept="image/*" multiple required style="max-width:360px">
     <button>Nahrát fotky</button>
-    <span class="muted small">Foťte zepředu, kolmo, s odklopeným krytem – aby byly čitelné popisky přístrojů. Velký rozvaděč klidně na víc fotek.</span>
+    <span class="muted small">Nejlépe: 1 fotka celého rozvaděče (skříň, rozmístění) + detail každé lišty zblízka, kolmo, bez odlesků –
+      AI pak přečte typy a proudy přístrojů. Z celkové fotky drobné popisky jen odhaduje.</span>
   </form>
   {% if sb.photos %}
   <div class="photos" style="margin-top:12px">
@@ -51,11 +52,26 @@
   {% set prop = sb.ai_proposal or {} %}
   {% if prop.devices %}
   <h3 style="margin-top:16px">Návrh AI <span class="muted small">({{ prop.model }}, {{ prop.at|czdate }})</span></h3>
+  {% set np = prop.nameplate or {} %}
+  {% if np.present %}
+  <div class="flash error">Na fotce je výrobní štítek{% if np.manufacturer %} výrobce <b>{{ np.manufacturer }}</b>{% endif %}{% if np.serial_number %}, v. č. {{ np.serial_number }}{% endif %}.
+    Pokud rozvaděč nevyrobila vaše firma, prohlášení o shodě vydává jeho výrobce – vy jen dokládáte jeho dokumentaci.</div>
+  {% endif %}
+  {% set enc = prop.enclosure or {} %}
+  {% if enc.manufacturer or enc.series or enc.modules %}
+  <p class="small">Skříň: <b>{{ enc.manufacturer }} {{ enc.series }} {{ enc.catalog_number }}</b>
+    {% if enc.rows %}· {{ enc.rows|num }} řady{% endif %}{% if enc.modules %} · {{ enc.modules|num }} modulů{% endif %}
+    {% if enc.material %}· {{ enc.material }}{% endif %}{% if enc.door %} · dveře {{ enc.door }}{% endif %}{% if enc.mounting %} · {{ enc.mounting }}{% endif %}
+    {% if enc.ip_code %}· {{ enc.ip_code }}{% endif %}
+    {% if enc.width_mm %}· cca {{ enc.width_mm|num }} × {{ enc.height_mm|num }} × {{ enc.depth_mm|num }} mm{% endif %}
+    <span class="muted">(doplní se do prázdných polí v části 3)</span></p>
+  {% endif %}
+  {% if prop.notes %}<p class="small muted">Poznámka AI: {{ prop.notes }}</p>{% endif %}
   <div class="scroll"><table class="list small">
-    <tr><th>#</th><th>Lišta</th><th>Druh</th><th>Výrobce</th><th>Typ</th><th>Póly</th><th>In</th><th>Char.</th><th>Icn kA</th><th>IΔn</th><th>Vývod</th><th>Jistota</th><th>Poznámka</th></tr>
+    <tr><th>#</th><th>Lišta</th><th>Ozn.</th><th>Druh</th><th>Výrobce</th><th>Typ</th><th>Póly</th><th>In</th><th>Char.</th><th>Icn kA</th><th>IΔn</th><th>Vývod</th><th>Jistota</th><th>Poznámka</th></tr>
     {% for d in prop.devices %}
     <tr class="{{ 'lowconf' if (d.confidence or 0) < 0.7 }}">
-      <td>{{ loop.index }}</td><td>{{ d.row or "" }}</td><td>{{ DEVICE_KINDS.get(d.kind, d.kind) }}</td><td>{{ d.manufacturer }}</td>
+      <td>{{ loop.index }}</td><td>{{ d.row or "" }}</td><td>{{ d.designation }}{% if d.is_main %} <span class="badge ok">hlavní</span>{% endif %}</td><td>{{ DEVICE_KINDS.get(d.kind, d.kind) }}</td><td>{{ d.manufacturer }}</td>
       <td>{{ d.type_code }}{% if d.catalog %} <span class="badge ok">katalog</span>{% endif %}</td><td>{{ d.poles }}</td>
       <td>{{ d.rated_current_a|num }}</td><td>{{ d.curve }}</td><td>{{ d.breaking_capacity_ka|num }}</td>
       <td>{{ d.residual_ma|num if d.residual_ma else "" }} {{ d.rcd_type }}</td><td>{{ d.circuit_label }}</td>

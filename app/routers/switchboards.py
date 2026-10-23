@@ -264,16 +264,16 @@ def recognize(request: Request, sb_id: int, user: User = Depends(current_user), 
         return redirect(f"/sb/{sb.id}#fotky")
     images = [(storage.load(p.storage_key), p.mime_type) for p in sb.photos]
     try:
-        devices, model = ai.recognize(images)
+        result, model = ai.recognize(images)
     except Exception as exc:  # noqa: BLE001
         flash(request, f"Rozpoznání selhalo: {exc}", "error")
         return redirect(f"/sb/{sb.id}#fotky")
-    for d in devices:
+    for d in result["devices"]:
         cat = catalog.lookup(db, sb.tenant_id, d["manufacturer"], d["type_code"])
         d["catalog"] = bool(cat and cat.verified)
-    sb.ai_proposal = {"model": model, "at": datetime.now(timezone.utc).isoformat(), "devices": devices}
+    sb.ai_proposal = {"model": model, "at": datetime.now(timezone.utc).isoformat(), **result}
     db.commit()
-    flash(request, f"AI ({model}) navrhla {len(devices)} přístrojů. Zkontrolujte návrh a převezměte ho.")
+    flash(request, f"AI ({model}) navrhla {len(result['devices'])} přístrojů. Zkontrolujte návrh a převezměte ho.")
     return redirect(f"/sb/{sb.id}#fotky")
 
 
@@ -286,8 +286,12 @@ def apply_proposal(request: Request, sb_id: int, mode: str = Form("replace"), us
         flash(request, "Není co převzít.", "error")
         return redirect(f"/sb/{sb.id}#fotky")
     n = proposal.apply(db, sb, devices, replace=(mode == "replace"))
+    enc_changed = proposal.apply_enclosure(sb, sb.ai_proposal.get("enclosure") or {})
     db.commit()
-    flash(request, f"Převzato {n} přístrojů. Zkontrolujte označení, „napájeno z“ a parametry.")
+    msg = f"Převzato {n} přístrojů. Zkontrolujte označení, „napájeno z“ a parametry."
+    if enc_changed:
+        msg += " Doplněny údaje skříně – zkontrolujte je v části 3."
+    flash(request, msg)
     return redirect(f"/sb/{sb.id}#pristroje")
 
 

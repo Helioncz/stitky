@@ -5,3 +5,7 @@ __pycache__/
 data/
 output/
 *.pyc
+# přístupové údaje nikdy do gitu
+*token*.txt
+*.key
+*.pem

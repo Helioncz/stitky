@@ -101,3 +101,27 @@ def test_proposal_designations_and_feeds(db):
     sb = db.get(Switchboard, sb.id)
     got = [(d.designation, d.feeds_from) for d in sb.devices]
     assert got == [("-Q1", ""), ("-F1", "-Q1"), ("-F2", "-F1"), ("-F3", "-Q1"), ("-FA1", "-Q1")]
+
+
+def test_proposal_uses_photo_labels_and_main_on_bottom_row(db):
+    """Rozvaděč FVE (Strunk): označení ze štítkového pruhu, hlavní vypínač až na 3. liště."""
+    t, _ = make_tenant(db, email="strunk@test.cz")
+    sb = make_switchboard(db, t, serial="S-1")
+    proposed = [
+        {"row": 1, "designation": "-F2", "kind": "MCB", "rated_current_a": 6},
+        {"row": 1, "designation": "-K1", "kind": "RELAY"},
+        {"row": 1, "designation": "", "kind": "MCB", "rated_current_a": 20},   # bez popisku
+        {"row": 2, "designation": "-KM1", "kind": "CONTACTOR"},
+        {"row": 3, "designation": "-Q0", "kind": "SWITCH", "is_main": True, "poles": "4"},
+    ]
+    proposal.apply(db, sb, proposed, replace=True)
+    changed = proposal.apply_enclosure(sb, {"manufacturer": "Legrand", "series": "Plexo³", "modules": 54,
+                                            "ip_code": "IP65", "width_mm": 460})
+    db.commit()
+    sb = db.get(Switchboard, sb.id)
+    got = [(d.designation, d.feeds_from) for d in sb.devices]
+    assert got[0] == ("-Q0", "")
+    assert ("-F2", "-Q0") in got and ("-KM1", "-Q0") in got and ("-F1", "-Q0") in got
+    assert sb.enclosure_manufacturer == "Legrand" and "54 modulů" in sb.enclosure_type
+    assert sb.ip_code == "IP65" and "ip_code" in changed
+    assert sb.width_mm == 400  # už vyplněné pole se nepřepisuje
