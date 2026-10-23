@@ -8,6 +8,7 @@ DEST=/opt/stitky-backup
 STAMP=$(date +%F)
 mkdir -p "$DEST"
 
+docker exec stitky mkdir -p /data/files   # na čerstvé instalaci ještě nic nenahráno
 docker exec stitky python -c "
 import sqlite3
 src = sqlite3.connect('/data/app.db'); dst = sqlite3.connect('/data/backup-app.db')
