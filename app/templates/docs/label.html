@@ -1,46 +1,12 @@
 <!doctype html>
 <html lang="cs"><head><meta charset="utf-8"><title>Štítek {{ s.sb.serial_number }}</title>
 <style>
-  /* Výrobní štítek dle ČSN EN IEC 61439-1 čl. 6.1 – 105 × 74 mm (A7 na šířku) */
+  /* Archivní PDF štítku 105 × 74 mm (tisk na arch s pozicí řeší label_sheet.html) */
   @page { size: 105mm 74mm; margin: 0; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #000; }
-  .label { width: 105mm; height: 74mm; padding: 3.5mm; border: 0.5mm solid #000; display: grid;
-           grid-template-columns: 1fr 22mm; grid-template-rows: auto 1fr auto; gap: 1.5mm 3mm; }
-  .firm { grid-column: 1 / 3; border-bottom: 0.4mm solid #000; padding-bottom: 1.2mm; font-size: 6.5pt; line-height: 1.25; }
-  .firm b { font-size: 9pt; }
-  .firm img { max-height: 7mm; max-width: 40mm; float: right; }
-  table { border-collapse: collapse; width: 100%; font-size: 6.8pt; }
-  td { padding: 0.35mm 0; vertical-align: top; }
-  td:first-child { color: #222; width: 46%; }
-  td:last-child { font-weight: bold; }
-  .side { display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-  .side .qr svg { width: 22mm; height: 22mm; }
-  .side .qr div { font-size: 5pt; text-align: center; }
-  .ce { width: 12mm; }   /* výška ≥ 5 mm */
-  .foot { grid-column: 1 / 3; font-size: 6pt; border-top: 0.3mm solid #000; padding-top: 1mm; display: flex; justify-content: space-between; }
+  body { margin: 0; }
+  {% include "_label_css.html" %}
+  .lbl.large { border: 0.5mm solid #000; }
 </style></head>
 <body>
-<div class="label">
-  <div class="firm">
-    {% if s.tenant.logo %}<img src="{{ s.tenant.logo }}" alt="">{% endif %}
-    <b>{{ s.tenant.name }}</b><br>{{ s.tenant.address_line }}{% if s.tenant.phone %} · {{ s.tenant.phone }}{% endif %}
-  </div>
-  <table>
-    <tr><td>Rozvaděč</td><td>{{ s.sb.designation }}{% if s.sb.type_designation %} · {{ s.sb.type_designation }}{% endif %}</td></tr>
-    <tr><td>Výrobní číslo</td><td>{{ s.sb.serial_number }}</td></tr>
-    <tr><td>Datum výroby</td><td>{{ s.sb.manufacture_date|czdate }}</td></tr>
-    <tr><td>Un / fn</td><td>{{ s.sb.un_v|num }} V / {{ s.sb.fn_hz|num }} Hz · {{ s.sb.phases }}</td></tr>
-    <tr><td>Síť</td><td>{{ s.sb.earthing_system }}</td></tr>
-    <tr><td>InA</td><td>{{ s.sb.ina_a|num }} A</td></tr>
-    <tr><td>Icc</td><td>{{ s.sb.icc_ka|num }} kA</td></tr>
-    <tr><td>Krytí / IK</td><td>{{ s.sb.ip_code }} / {{ s.sb.ik_code }}</td></tr>
-    {% if s.sb.weight_kg %}<tr><td>Hmotnost</td><td>{{ s.sb.weight_kg|num }} kg</td></tr>{% endif %}
-  </table>
-  <div class="side">
-    <div class="qr">{{ s.qr_svg|safe }}<div>dokumentace</div></div>
-    <div class="ce">{{ s.ce_svg|safe }}</div>
-  </div>
-  <div class="foot"><span>{{ s.main_standard }}</span><span>{{ s.sb.standard_label }}</span></div>
-</div>
+{% with dw=105, dh=74 %}{% include "_label_large.html" %}{% endwith %}
 </body></html>

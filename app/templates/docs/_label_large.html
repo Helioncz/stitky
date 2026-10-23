@@ -1,0 +1,22 @@
+<div class="lbl large" style="width:{{ dw }}mm;height:{{ dh }}mm">
+  <div class="firm">
+    {% if s.tenant.logo %}<img src="{{ s.tenant.logo }}" alt="">{% endif %}
+    <b>{{ s.tenant.name }}</b><br>{{ s.tenant.address_line }}{% if s.tenant.phone %} · {{ s.tenant.phone }}{% endif %}
+  </div>
+  <table>
+    <tr><td class="k">Rozvaděč</td><td class="v">{{ s.sb.designation }}{% if s.sb.type_designation %} · {{ s.sb.type_designation }}{% endif %}</td></tr>
+    <tr><td class="k">Výrobní číslo</td><td class="v">{{ s.sb.serial_number }}</td></tr>
+    <tr><td class="k">Datum výroby</td><td class="v">{{ s.sb.manufacture_date|czdate }}</td></tr>
+    <tr><td class="k">Un / fn</td><td class="v">{{ s.sb.un_v|num }} V / {{ s.sb.fn_hz|num }} Hz · {{ s.sb.phases }}</td></tr>
+    <tr><td class="k">Síť</td><td class="v">{{ s.sb.earthing_system }}</td></tr>
+    <tr><td class="k">InA</td><td class="v">{{ s.sb.ina_a|num }} A</td></tr>
+    <tr><td class="k">Icc</td><td class="v">{{ s.sb.icc_ka|num }} kA</td></tr>
+    <tr><td class="k">Krytí / IK</td><td class="v">{{ s.sb.ip_code }} / {{ s.sb.ik_code }}</td></tr>
+    {% if s.sb.weight_kg %}<tr><td class="k">Hmotnost</td><td class="v">{{ s.sb.weight_kg|num }} kg</td></tr>{% endif %}
+  </table>
+  <div class="side">
+    <div class="qr">{{ s.qr_svg|safe }}<div>dokumentace</div></div>
+    <div class="ce">{{ s.ce_svg|safe }}</div>
+  </div>
+  <div class="foot"><span>{{ s.main_standard }}</span><span>{{ s.sb.standard_label }}</span></div>
+</div>

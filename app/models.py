@@ -48,6 +48,10 @@ class Tenant(Base):
     next_serial: Mapped[int] = mapped_column(Integer, default=1)
     # Přepis výchozích norem (čísla edic) – viz app.domain.standards
     standards_override: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Arch etiket pro tisk štítku – {"preset", rozměry, offset_x/y}, viz app.domain.label_sheets
+    label_sheet: Mapped[dict | None] = mapped_column(JSON, default=dict)
+    # Další volná pozice na rozpracovaném archu {"row", "col"}
+    label_next: Mapped[dict | None] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     users: Mapped[list["User"]] = relationship(back_populates="tenant")
@@ -169,6 +173,17 @@ class Switchboard(Base):
     def latest_revision(self) -> "Revision | None":
         return self.revisions[-1] if self.revisions else None
 
+    @property
+    def latest_locked(self) -> "Revision | None":
+        """Poslední zamčená revize – jen ta platí navenek (zákazník, QR)."""
+        return next((r for r in reversed(self.revisions) if r.locked_at), None)
+
+    @property
+    def open_revision(self) -> "Revision | None":
+        """Vygenerovaná, ale ještě nezamčená revize (lze ji přegenerovat)."""
+        r = self.latest_revision
+        return r if r and not r.locked_at else None
+
 
 DEVICE_KINDS = {
     "MCB": "jistič",
@@ -268,19 +283,26 @@ class Photo(Base):
 
 
 class Revision(Base):
-    """Vydaná (zamčená) revize dokumentace rozvaděče."""
+    """Revize dokumentace rozvaděče.
+
+    Vygenerovaná revize je otevřená (lze ji přegenerovat pod stejným číslem). Zamknutím
+    (`locked_at`) se stane neměnnou a platnou navenek – zákazník, QR, katalog.
+    """
     __tablename__ = "revisions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     switchboard_id: Mapped[int] = mapped_column(ForeignKey("switchboards.id", ondelete="CASCADE"), index=True)
     number: Mapped[int] = mapped_column(Integer)
-    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)  # vygenerováno
     issued_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    locked_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     note: Mapped[str] = mapped_column(Text, default="")
     snapshot: Mapped[dict] = mapped_column(JSON)
 
     switchboard: Mapped[Switchboard] = relationship(back_populates="revisions")
-    issued_by: Mapped[User | None] = relationship()
+    issued_by: Mapped[User | None] = relationship(foreign_keys=[issued_by_id])
+    locked_by: Mapped[User | None] = relationship(foreign_keys=[locked_by_id])
     documents: Mapped[list["Document"]] = relationship(back_populates="revision", cascade="all, delete-orphan")
 
     __table_args__ = (UniqueConstraint("switchboard_id", "number", name="uq_revision_number"),)

@@ -13,10 +13,10 @@
     <h2>Dokumentace ke stažení</h2>
     {% for d in rev.documents|sort(attribute="id") %}<a href="/d/{{ sb.public_token }}/{{ d.id }}" target="_blank">📄 {{ d.kind_label }}</a>{% endfor %}
   </div>
-  {% if sb.revisions|length > 1 %}
+  {% if older %}
   <div class="card small">
     <h2>Starší revize</h2>
-    {% for r in sb.revisions[:-1]|reverse %}
+    {% for r in older|reverse %}
     <p>Rev. {{ "%02d"|format(r.number) }} ({{ r.issued_at|czdate }}):
       {% for d in r.documents if d.kind == "bundle" %}<a href="/d/{{ sb.public_token }}/{{ d.id }}" target="_blank">kompletní dokumentace</a>{% endfor %}</p>
     {% endfor %}

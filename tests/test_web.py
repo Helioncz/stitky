@@ -24,6 +24,12 @@ def _new_sb(c: TestClient) -> int:
     return int(re.search(r"/sb/(\d+)", str(r.url)).group(1))
 
 
+def db_token(sb_id: int) -> str:
+    from app.db import SessionLocal
+    with SessionLocal() as s:
+        return s.get(Switchboard, sb_id).public_token
+
+
 def test_login_required():
     c = TestClient(app)
     r = c.get("/", follow_redirects=False)
@@ -51,17 +57,35 @@ def test_full_flow_and_isolation():
     assert "EF2026-0001" in page and "MSO-32-3" in page
 
     assert "EU prohlášení o shodě" in c.get(f"/sb/{sb_id}/preview/eu_doc").text
-    r = c.post(f"/sb/{sb_id}/issue", data={"note": "test"})
-    assert "Vydána revize 00" in r.text
+    r = c.post(f"/sb/{sb_id}/generate", data={"note": "test"})
+    assert "Vygenerována revize 00" in r.text and "nezamčeno" in r.text
     doc_id = int(re.search(r'href="/doc/(\d+)"', r.text).group(1))
     assert c.get(f"/doc/{doc_id}").content.startswith(b"%PDF")
+
+    # nezamčená revize: zákazník nic nevidí, katalog se zatím neučí
+    token = db_token(sb_id)
+    assert TestClient(app).get(f"/d/{token}").status_code == 404
+    assert c.get("/catalog/search?q=LTN-16").json() == []
+
+    # přegenerování otevřené revize = stejné číslo
+    r = c.post(f"/sb/{sb_id}/generate")
+    assert "Vygenerována revize 00" in r.text and "revize 01" not in r.text.lower()
+
+    # změna údajů po vygenerování → zamčení odmítnuto
+    c.post(f"/sb/{sb_id}", data={"site": "Změněná akce"})
+    rev_id = int(re.search(r'/revision/(\d+)/lock', c.get(f"/sb/{sb_id}").text).group(1))
+    r = c.post(f"/revision/{rev_id}/lock")
+    assert "nejdřív dokumentaci vygenerujte znovu" in r.text
+    c.post(f"/sb/{sb_id}/generate")
+    r = c.post(f"/revision/{rev_id}/lock")
+    assert "zamčena a archivována" in r.text
+    assert "Vygenerovat PDF – revize 01" in r.text   # další generování = nová revize
 
     # katalog se naučil potvrzené přístroje
     hits = c.get("/catalog/search?q=LTN-16").json()
     assert hits and hits[0]["verified"] and hits[0]["breaking_capacity_ka"] == 10
 
     # veřejná stránka přes token
-    token = re.search(r"/d/([\w-]+)", r.text).group(1)
     pub = TestClient(app).get(f"/d/{token}")
     assert pub.status_code == 200 and "EF2026-0001" in pub.text
 

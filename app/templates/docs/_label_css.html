@@ -1,0 +1,33 @@
+/* Výrobní štítek dle ČSN EN IEC 61439-1 čl. 6.1. Rozměry v mm v návrhové velikosti,
+   na etiketu se celý blok škáluje (transform) – viz app.domain.label_sheets.fit. */
+.lbl { box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; color: #000; overflow: hidden; }
+.lbl * { box-sizing: border-box; }
+.lbl table { border-collapse: collapse; width: 100%; }
+.lbl td { padding: 0; vertical-align: top; }
+.lbl td.k { color: #222; white-space: nowrap; padding-right: 2mm; width: 1%; }
+.lbl td.v { font-weight: bold; }
+.lbl .qr svg { display: block; width: 100%; height: auto; }
+.lbl .ce svg { display: block; height: 100%; width: auto; }
+
+/* velké rozvržení 105 × 74 */
+.lbl.large { padding: 3.5mm; display: grid; grid-template-columns: 1fr 22mm; grid-template-rows: auto 1fr auto; gap: 1.5mm 3mm; }
+.lbl.large .firm { grid-column: 1 / 3; border-bottom: 0.4mm solid #000; padding-bottom: 1.2mm; font-size: 6.5pt; line-height: 1.25; }
+.lbl.large .firm b { font-size: 9pt; }
+.lbl.large .firm img { max-height: 7mm; max-width: 40mm; float: right; }
+.lbl.large table { font-size: 6.8pt; }
+.lbl.large td { padding: 0.35mm 0; }
+.lbl.large .side { display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.lbl.large .qr { width: 22mm; }
+.lbl.large .qr div { font-size: 5pt; text-align: center; }
+.lbl.large .ce { height: 10mm; }
+.lbl.large .foot { grid-column: 1 / 3; font-size: 6pt; border-top: 0.3mm solid #000; padding-top: 1mm; display: flex; justify-content: space-between; }
+
+/* kompaktní rozvržení – výška 37, šířka pružná (min. 62) */
+.lbl.compact { padding: 1.8mm 2mm; display: grid; grid-template-columns: 1fr 15mm; grid-template-rows: auto 1fr auto; gap: 0.6mm 2mm; }
+.lbl.compact .firm { grid-column: 1 / 3; font-size: 4.8pt; line-height: 1.15; border-bottom: 0.25mm solid #000; padding-bottom: 0.5mm; white-space: nowrap; overflow: hidden; }
+.lbl.compact .firm b { font-size: 6.8pt; }
+.lbl.compact table { font-size: 5.6pt; line-height: 1.12; }
+.lbl.compact .side { display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.lbl.compact .qr { width: 15mm; }
+.lbl.compact .ce { height: 5.5mm; }   /* CE min. 5 mm */
+.lbl.compact .foot { grid-column: 1 / 3; font-size: 4.6pt; display: flex; justify-content: space-between; border-top: 0.2mm solid #000; padding-top: 0.3mm; }

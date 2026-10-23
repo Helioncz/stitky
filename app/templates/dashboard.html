@@ -22,7 +22,8 @@
     <td>{{ sb.designation }} <span class="muted small">{{ sb.name }}</span></td>
     <td>{{ sb.site or "–" }}<br><span class="muted small">{{ sb.customer.name if sb.customer else "" }}</span></td>
     <td>{{ sb.devices|length }}</td>
-    <td>{% if sb.latest_revision %}<span class="badge ok">vydáno rev. {{ "%02d"|format(sb.latest_revision.number) }}</span>{% else %}<span class="badge">koncept</span>{% endif %}</td>
+    <td>{% if sb.latest_locked %}<span class="badge ok">🔒 rev. {{ "%02d"|format(sb.latest_locked.number) }}</span>{% endif %}
+      {% if sb.open_revision %}<span class="badge ai">rev. {{ "%02d"|format(sb.open_revision.number) }} nezamčena</span>{% elif not sb.revisions %}<span class="badge">koncept</span>{% endif %}</td>
     <td class="small muted">{{ sb.updated_at|czdate }}</td>
   </tr>
   {% else %}

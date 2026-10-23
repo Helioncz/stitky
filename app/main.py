@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import BASE_DIR, settings
 from app.db import init_db
-from app.routers import auth, public, settings as settings_router, switchboards
+from app.routers import auth, labels, public, settings as settings_router, switchboards
 from app.security import LoginRequired
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -29,6 +29,7 @@ app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, session_co
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
 
 app.include_router(auth.router)
+app.include_router(labels.router)
 app.include_router(public.router)
 app.include_router(settings_router.router)
 app.include_router(switchboards.router)

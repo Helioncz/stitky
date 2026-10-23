@@ -39,18 +39,20 @@ def search(db: Session, tenant_id: int, q: str, limit: int = 15) -> list[Catalog
     return [r for r in rows if key in norm(r.type_code) or key in norm(r.manufacturer)][:limit]
 
 
-def learn(db: Session, tenant_id: int, devices: list[Device]) -> None:
-    """Uloží potvrzené přístroje (po vydání revize) do katalogu firmy."""
+def learn(db: Session, tenant_id: int, devices: list[Device | dict]) -> None:
+    """Uloží potvrzené přístroje (po zamčení revize) do katalogu firmy. Bere ORM objekty i řádky snapshotu."""
     for d in devices:
-        if not d.type_code or d.kind in ("TERMINAL", "OTHER"):
+        get = d.get if isinstance(d, dict) else lambda f, _d=d: getattr(_d, f)
+        if not get("type_code") or get("kind") in ("TERMINAL", "OTHER"):
             continue
         cat = db.scalar(select(CatalogDevice).where(
-            CatalogDevice.tenant_id == tenant_id, CatalogDevice.manufacturer == d.manufacturer,
-            CatalogDevice.type_code == d.type_code))
+            CatalogDevice.tenant_id == tenant_id, CatalogDevice.manufacturer == get("manufacturer"),
+            CatalogDevice.type_code == get("type_code")))
         if cat is None:
-            cat = CatalogDevice(tenant_id=tenant_id, manufacturer=d.manufacturer, type_code=d.type_code, times_used=0)
+            cat = CatalogDevice(tenant_id=tenant_id, manufacturer=get("manufacturer"), type_code=get("type_code"),
+                                times_used=0)
             db.add(cat)
         for f in _FIELDS:
-            setattr(cat, f, getattr(d, f))
+            setattr(cat, f, get(f))
         cat.verified = True
         cat.times_used = (cat.times_used or 0) + 1

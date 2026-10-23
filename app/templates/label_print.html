@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Tisk štítku {{ sb.serial_number }}{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>Tisk štítku · {{ sb.serial_number }} {{ sb.designation }}</h1>
+  <span class="spacer"></span><a class="btn" href="/sb/{{ sb.id }}#vydani">Zpět na rozvaděč</a>
+</div>
+{% if not rev %}
+<div class="flash error">Rozvaděč ještě nemá vygenerovanou dokumentaci – štítek se vytiskne z aktuálních údajů (bez kontroly). Doporučeno nejdřív vygenerovat revizi.</div>
+{% elif not rev.locked_at %}
+<div class="flash error">Štítek je z revize {{ "%02d"|format(rev.number) }}, která ještě není zamčená. QR kód zákazníkovi začne fungovat až po zamčení.</div>
+{% endif %}
+
+<div class="card">
+  <p class="small muted" style="margin-top:0">Arch: <b>{{ sheet.name or "vlastní" }}</b> ({{ sheet.cols }} × {{ sheet.rows }}, etiketa {{ sheet.label_w|num }} × {{ sheet.label_h|num }} mm) –
+    změna v <a href="/settings#stitky">Nastavení</a>. Klikněte na pozici, kam se má štítek vytisknout.</p>
+
+  {% set scale = 1.6 %}
+  <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+    <div id="sheet" style="position:relative;width:{{ sheet.page_w * scale }}px;height:{{ sheet.page_h * scale }}px;background:#fff;border:1px solid #999;box-shadow:0 2px 8px rgba(0,0,0,.15)">
+      {% for r in range(1, sheet.rows + 1) %}{% for c in range(1, sheet.cols + 1) %}
+      <button type="button" class="pos" data-row="{{ r }}" data-col="{{ c }}" title="řada {{ r }}, {{ c }}. zleva"
+        style="position:absolute;left:{{ (sheet.margin_left + (c - 1) * (sheet.label_w + sheet.gap_x)) * scale }}px;top:{{ (sheet.margin_top + (r - 1) * (sheet.label_h + sheet.gap_y)) * scale }}px;width:{{ sheet.label_w * scale - 2 }}px;height:{{ sheet.label_h * scale - 2 }}px;padding:0;border-radius:3px;font-size:12px">
+        {{ r }}/{{ c }}</button>
+      {% endfor %}{% endfor %}
+    </div>
+
+    <form method="get" action="/sb/{{ sb.id }}/label.pdf" target="_blank" style="min-width:240px">
+      <input type="hidden" name="row" id="row" value="{{ row }}">
+      <input type="hidden" name="col" id="col" value="{{ col }}">
+      <p style="font-size:18px;margin:0 0 10px">Pozice: <b id="postext"></b></p>
+      <label>Počet kusů (další pozice po řádcích)<input type="number" name="count" value="1" min="1" max="{{ sheet.rows * sheet.cols }}" style="width:90px"></label>
+      <p><button class="primary">Vytisknout PDF</button></p>
+      <p class="small muted">Tiskněte ve <b>skutečné velikosti (100 %)</b>, ne „přizpůsobit stránce“.
+        Arch vložte podle tiskárny (HP: potiskovanou stranou dolů do zásobníku, horním okrajem napřed).
+        Aplikace si pamatuje další volnou pozici na rozpracovaném archu.</p>
+    </form>
+  </div>
+</div>
+
+<style>
+  #sheet .pos { background: #f4f6f9; border: 1px dashed #9aa3af; color: #6b7280; }
+  #sheet .pos:hover { background: #e3eefb; }
+  #sheet .pos.sel { background: var(--accent); color: #fff; border: 1px solid var(--accent); font-weight: 700; }
+  #sheet .pos.more { background: #cfe0f5; color: #0b5cad; }
+</style>
+<script>
+(function () {
+  const cols = {{ sheet.cols }}, total = {{ sheet.rows * sheet.cols }};
+  const rowI = document.getElementById("row"), colI = document.getElementById("col");
+  const cnt = document.querySelector("input[name=count]");
+  function paint() {
+    const start = (rowI.value - 1) * cols + (colI.value - 1);
+    const n = Math.max(1, parseInt(cnt.value || "1", 10));
+    document.querySelectorAll("#sheet .pos").forEach((b) => {
+      const i = (b.dataset.row - 1) * cols + (b.dataset.col - 1);
+      b.classList.toggle("sel", i === start);
+      b.classList.toggle("more", i > start && i < start + n);
+    });
+    document.getElementById("postext").textContent = `${rowI.value}. řada, ${colI.value}. zleva`;
+  }
+  document.querySelectorAll("#sheet .pos").forEach((b) => b.addEventListener("click", () => {
+    rowI.value = b.dataset.row; colI.value = b.dataset.col; paint();
+  }));
+  cnt.addEventListener("input", paint);
+  paint();
+})();
+</script>
+{% endblock %}

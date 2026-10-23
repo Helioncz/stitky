@@ -14,11 +14,13 @@
 {% block content %}
 <div class="row">
   <h1>{{ sb.serial_number }} · {{ sb.designation }} <span class="muted" style="font-weight:400">{{ sb.name }}</span></h1>
-  {% if sb.latest_revision %}<span class="badge ok">vydáno rev. {{ "%02d"|format(sb.latest_revision.number) }}</span>{% else %}<span class="badge">koncept</span>{% endif %}
+  {% if sb.latest_locked %}<span class="badge ok">🔒 rev. {{ "%02d"|format(sb.latest_locked.number) }}</span>{% endif %}
+  {% if open_rev %}<span class="badge ai">rev. {{ "%02d"|format(open_rev.number) }} nezamčena</span>{% elif not sb.revisions %}<span class="badge">koncept</span>{% endif %}
   <span class="spacer"></span>
   <a class="btn" href="/sb/{{ sb.id }}/preview/bundle" target="_blank">Náhled dokumentace</a>
+  <a class="btn" href="/sb/{{ sb.id }}/label">🏷 Tisk štítku</a>
   <form method="post" action="/sb/{{ sb.id }}/copy"><button title="Nový rozvaděč se stejnými údaji a přístroji">Kopírovat</button></form>
-  {% if not sb.revisions %}<form method="post" action="/sb/{{ sb.id }}/delete" onsubmit="return confirm('Smazat koncept rozvaděče?')"><button class="danger">Smazat</button></form>{% endif %}
+  {% if not sb.latest_locked %}<form method="post" action="/sb/{{ sb.id }}/delete" onsubmit="return confirm('Smazat koncept rozvaděče?')"><button class="danger">Smazat</button></form>{% endif %}
 </div>
 
 <nav class="subnav">
@@ -216,24 +218,38 @@
     <a href="/sb/{{ sb.id }}/preview/{{ k }}" target="_blank">{{ DOCUMENT_KINDS[k] }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
   </p>
 
-  <form method="post" action="/sb/{{ sb.id }}/issue" class="row" style="margin-top:8px"
-        onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Generuji PDF…'">
-    <input name="note" placeholder="Poznámka k revizi (např. výměna -F3 za 20 A)" style="max-width:420px">
-    <button class="primary" {% if blocking %}disabled title="Nejdřív vyřešte blokující připomínky"{% endif %}>
-      Vydat {{ "revizi %02d"|format(sb.revisions|length) }} (zamknout a vygenerovat PDF)</button>
-  </form>
-  <p class="muted small">Vydaná revize je neměnná a archivovaná (PDF + otisk SHA-256). Další změna = nová revize. Prohlášení uchovávejte 10 let.</p>
+  {% set next_no = open_rev.number if open_rev else sb.revisions|length %}
+  <div class="row" style="margin-top:8px; align-items:flex-start">
+    <form method="post" action="/sb/{{ sb.id }}/generate" class="row"
+          onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Generuji PDF…'">
+      <input name="note" placeholder="Poznámka k revizi (např. výměna -F3 za 20 A)" style="width:340px" value="{{ open_rev.note if open_rev else '' }}">
+      <button class="primary" {% if blocking %}disabled title="Nejdřív vyřešte blokující připomínky"{% endif %}>
+        {{ "Vygenerovat znovu" if open_rev else "Vygenerovat" }} PDF – revize {{ "%02d"|format(next_no) }}</button>
+    </form>
+    {% if open_rev %}
+    <form method="post" action="/revision/{{ open_rev.id }}/lock"
+          onsubmit="return confirm('Zamknout revizi {{ '%02d'|format(open_rev.number) }}? Poté ji už nepůjde změnit – další úprava bude nová revize.')">
+      <button {% if stale %}disabled title="Údaje se od vygenerování změnily – vygenerujte znovu"{% endif %}>🔒 Zamknout revizi {{ "%02d"|format(open_rev.number) }}</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if stale %}<p class="small" style="color:var(--warn)">Údaje rozvaděče se od vygenerování revize {{ "%02d"|format(open_rev.number) }} změnily – PDF neodpovídají. Vygenerujte znovu, pak lze zamknout.</p>{% endif %}
+  <p class="muted small">1) Vygenerujte PDF a zkontrolujte je – nezamčenou revizi lze libovolně přegenerovat. 2) Zamkněte: revize se stane neměnnou
+    (archiv, otisk SHA-256), zpřístupní se zákazníkovi přes QR a přístroje se uloží do katalogu. Další změna = nová revize. Prohlášení uchovávejte 10 let.</p>
 
   {% if sb.revisions %}
-  <h3>Archiv revizí</h3>
+  <h3>Revize</h3>
   <table class="list small">
-    <tr><th>Rev.</th><th>Vydáno</th><th>Vydal</th><th>Poznámka</th><th>Dokumenty</th></tr>
+    <tr><th>Rev.</th><th>Stav</th><th>Vygenerováno</th><th>Poznámka</th><th>Dokumenty</th></tr>
     {% for r in sb.revisions|reverse %}
-    <tr><td><b>{{ "%02d"|format(r.number) }}</b></td><td>{{ r.issued_at|czdate }}</td><td>{{ r.issued_by.name if r.issued_by else "" }}</td><td>{{ r.note }}</td>
+    <tr><td><b>{{ "%02d"|format(r.number) }}</b></td>
+      <td>{% if r.locked_at %}<span class="badge ok">🔒 zamčeno</span><br><span class="muted">{{ r.locked_at|czdate }}{% if r.locked_by %}, {{ r.locked_by.name }}{% endif %}</span>{% else %}<span class="badge ai">nezamčeno</span>{% endif %}</td>
+      <td>{{ r.issued_at|czdate }}<br><span class="muted">{{ r.issued_by.name if r.issued_by else "" }}</span></td><td>{{ r.note }}</td>
       <td class="docs">{% for d in r.documents|sort(attribute="id") %}<a href="/doc/{{ d.id }}" target="_blank" title="SHA-256 {{ d.sha256 }}">{{ d.kind_label }}</a>{% endfor %}</td></tr>
     {% endfor %}
   </table>
-  <p class="small">Veřejný odkaz pro zákazníka (QR na štítku): <a href="{{ public_url }}" target="_blank">{{ public_url }}</a></p>
+  {% if sb.latest_locked %}<p class="small">Veřejný odkaz pro zákazníka (QR na štítku): <a href="{{ public_url }}" target="_blank">{{ public_url }}</a></p>
+  {% else %}<p class="small muted">Veřejný odkaz (QR na štítku) začne fungovat po zamčení první revize.</p>{% endif %}
   {% endif %}
 </section>
 {% endblock %}

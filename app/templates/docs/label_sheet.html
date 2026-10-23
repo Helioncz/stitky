@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><title>Štítky – arch</title>
+<style>
+  /* Tisknout ve SKUTEČNÉ VELIKOSTI (100 %), ne „přizpůsobit stránce“. */
+  @page { size: {{ sheet.page_w }}mm {{ sheet.page_h }}mm; margin: 0; }
+  body { margin: 0; }
+  .page { position: relative; width: {{ sheet.page_w }}mm; height: {{ sheet.page_h }}mm; overflow: hidden; }
+  .cell { position: absolute; overflow: hidden; }
+  .inner { transform-origin: 0 0; }
+  .calib { border: 0.2mm dashed #000; font: 8pt Arial, sans-serif; display: flex; align-items: center; justify-content: center; color: #333; }
+  .calib b { font-size: 14pt; margin-right: 2mm; }
+  {% include "_label_css.html" %}
+</style></head>
+<body><div class="page">
+{% for c in cells %}
+  <div class="cell{% if calibration %} calib{% endif %}" style="left:{{ c.left }}mm;top:{{ c.top }}mm;width:{{ c.w }}mm;height:{{ c.h }}mm">
+  {% if calibration %}
+    <b>{{ c.row }}/{{ c.col }}</b> řada {{ c.row }}, {{ c.col }}. zleva
+  {% else %}
+    <div class="inner" style="transform:scale({{ c.scale }})">
+      {% with dw=c.dw, dh=c.dh %}{% include "_label_" ~ c.layout ~ ".html" %}{% endwith %}
+    </div>
+  {% endif %}
+  </div>
+{% endfor %}
+</div></body></html>

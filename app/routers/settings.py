@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.domain import label_sheets
 from app.domain.standards import DEFAULT_STANDARDS
 from app.models import User
 from app.security import admin_user, current_user, hash_password
@@ -23,7 +24,8 @@ TENANT_FIELDS = ["name", "ico", "dic", "street", "city", "zip", "country", "emai
 @router.get("/settings")
 def settings_page(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     users = db.scalars(select(User).where(User.tenant_id == user.tenant_id).order_by(User.name)).all()
-    return render(request, "settings.html", user=user, t=user.tenant, users=users, standards=DEFAULT_STANDARDS)
+    return render(request, "settings.html", user=user, t=user.tenant, users=users, standards=DEFAULT_STANDARDS,
+                  sheet=label_sheets.sheet_for(user.tenant.label_sheet), sheet_presets=label_sheets.PRESETS)
 
 
 @router.post("/settings")

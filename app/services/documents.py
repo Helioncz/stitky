@@ -6,6 +6,7 @@ kdykoli přesně znovu vykreslit, i když se mezitím změnil rozvaděč nebo fi
 """
 import base64
 import hashlib
+import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.domain import characteristics, standards
+from app.domain import characteristics, label_sheets, standards
 from app.models import DOCUMENT_KINDS, Document, Revision, Switchboard, Tenant, User
 from app.services import catalog, marks, pdf, schematic, storage
 
@@ -127,32 +128,78 @@ def render_html(kind: str, snap: dict) -> str:
     return env.get_template("page.html").render(s=snap, kind=kind, titles=DOCUMENT_KINDS)
 
 
+def render_label_sheet(snap: dict | None, sheet: dict, positions: list[tuple[int, int]],
+                       calibration: bool = False) -> str:
+    """Arch etiket se štítkem na zvolených pozicích. calibration=True: jen obrysy všech etiket s čísly."""
+    if calibration:
+        positions = [(r, c) for r in range(1, sheet["rows"] + 1) for c in range(1, sheet["cols"] + 1)]
+    cells = [label_sheets.cell_box(sheet, r, c) for r, c in positions]
+    return env.get_template("label_sheet.html").render(s=snap, sheet=sheet, cells=cells, calibration=calibration)
+
+
 def render_pdfs(snap: dict) -> dict[str, bytes]:
     kinds = ["bundle", *DOC_ORDER, "label"]
     return dict(zip(kinds, pdf.html_many_to_pdf([render_html(k, snap) for k in kinds])))
 
 
-def issue_revision(db: Session, sb: Switchboard, user: User, note: str = "") -> Revision:
+_HASHED = ("tenant", "sb", "devices", "routine_test", "standards")
+
+
+def data_hash(snap: dict) -> str:
+    """Otisk věcného obsahu snapshotu (bez data, čísla revize a grafiky) – pozná změnu údajů."""
+    payload = {k: snap.get(k) for k in _HASHED}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
+
+
+def generate_revision(db: Session, sb: Switchboard, user: User, note: str = "") -> Revision:
+    """Vygeneruje PDF. Otevřenou (nezamčenou) revizi přepíše, jinak založí novou."""
     analysis = characteristics.analyze(sb)
     if characteristics.blocking(analysis.warnings):
-        raise ValueError("Dokumentaci nelze vydat: " + "; ".join(analysis.warnings))
-    last = db.scalar(select(func.max(Revision.number)).where(Revision.switchboard_id == sb.id))
-    number = 0 if last is None else last + 1
-    snap = build_snapshot(sb, user.tenant, number, issued_by=user)
+        raise ValueError("Dokumentaci nelze vygenerovat: " + "; ".join(analysis.warnings))
+    rev = sb.open_revision
+    if rev is None:
+        last = db.scalar(select(func.max(Revision.number)).where(Revision.switchboard_id == sb.id))
+        rev = Revision(switchboard=sb, number=0 if last is None else last + 1)
+        db.add(rev)
+    else:
+        rev.documents.clear()  # delete-orphan smaže staré záznamy, soubory se přepíší stejnými klíči
+    rev.issued_at = datetime.now(timezone.utc)
+    rev.issued_by_id = user.id
+    rev.note = note or rev.note or ""
+    snap = build_snapshot(sb, user.tenant, rev.number, issued_by=user, issued_at=rev.issued_at)
+    snap["data_hash"] = data_hash(snap)
+    rev.snapshot = snap
     files = render_pdfs(snap)
-
-    rev = Revision(switchboard_id=sb.id, number=number, issued_by_id=user.id, note=note, snapshot=snap)
-    db.add(rev)
     db.flush()
-    base = f"t{sb.tenant_id}/sb{sb.id}/rev{number:02d}"
+
+    base = f"t{sb.tenant_id}/sb{sb.id}/rev{rev.number:02d}"
     safe_serial = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in sb.serial_number)
     for kind, data in files.items():
-        key = storage.save(f"{base}/{safe_serial}_{kind}_rev{number:02d}.pdf", data)
-        db.add(Document(revision_id=rev.id, kind=kind, storage_key=key,
-                        sha256=hashlib.sha256(data).hexdigest(), size=len(data)))
-    catalog.learn(db, sb.tenant_id, list(sb.devices))
+        key = storage.save(f"{base}/{safe_serial}_{kind}_rev{rev.number:02d}.pdf", data)
+        rev.documents.append(Document(kind=kind, storage_key=key,
+                                      sha256=hashlib.sha256(data).hexdigest(), size=len(data)))
     db.commit()
     return rev
+
+
+def lock_revision(db: Session, rev: Revision, user: User) -> Revision:
+    """Zamkne revizi. Odmítne, pokud se údaje rozvaděče od vygenerování změnily."""
+    if rev.locked_at:
+        raise ValueError(f"Revize {rev.number:02d} už je zamčená.")
+    sb = rev.switchboard
+    current = build_snapshot(sb, user.tenant, rev.number)
+    if data_hash(current) != rev.snapshot.get("data_hash"):
+        raise ValueError("Údaje rozvaděče se od vygenerování změnily – nejdřív dokumentaci vygenerujte znovu.")
+    rev.locked_at = datetime.now(timezone.utc)
+    rev.locked_by_id = user.id
+    catalog.learn(db, sb.tenant_id, rev.snapshot.get("devices") or [])
+    db.commit()
+    return rev
+
+
+def issue_revision(db: Session, sb: Switchboard, user: User, note: str = "") -> Revision:
+    """Vygeneruje a rovnou zamkne (pro skripty a testy)."""
+    return lock_revision(db, generate_revision(db, sb, user, note), user)
 
 
 def next_serial(tenant: Tenant) -> str:

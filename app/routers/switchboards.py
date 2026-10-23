@@ -91,8 +91,8 @@ def copy(request: Request, sb_id: int, user: User = Depends(current_user), db: S
 @router.post("/sb/{sb_id}/delete")
 def delete(request: Request, sb_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
     sb = get_owned(db, Switchboard, sb_id, user)
-    if sb.revisions:
-        flash(request, "Rozvaděč s vydanou dokumentací nelze smazat – je součástí archivu.", "error")
+    if sb.latest_locked:
+        flash(request, "Rozvaděč se zamčenou dokumentací nelze smazat – je součástí archivu.", "error")
         return redirect(f"/sb/{sb.id}")
     db.delete(sb)
     db.commit()
@@ -105,7 +105,11 @@ def detail(request: Request, sb_id: int, user: User = Depends(current_user), db:
     sb = get_owned(db, Switchboard, sb_id, user)
     analysis = characteristics.analyze(sb)
     rt_items = (sb.routine_test or {}).get("items") or {}
+    open_rev = sb.open_revision
+    stale = bool(open_rev) and documents.data_hash(
+        documents.build_snapshot(sb, user.tenant, open_rev.number)) != open_rev.snapshot.get("data_hash")
     return render(request, "switchboard.html", user=user, sb=sb, a=analysis, customers=_customers(db, user),
+                  open_rev=open_rev, stale=stale,
                   rt_rows=[(c, t, rt_items.get(c) or {}) for c, t in standards.ROUTINE_TEST_ITEMS],
                   blocking=characteristics.blocking(analysis.warnings),
                   public_url=documents.public_url(sb))
@@ -317,17 +321,33 @@ def preview(sb_id: int, kind: str, user: User = Depends(current_user), db: Sessi
         raise HTTPException(404) from None
 
 
-@router.post("/sb/{sb_id}/issue")
-def issue(request: Request, sb_id: int, note: str = Form(""), user: User = Depends(current_user),
-          db: Session = Depends(get_db)):
+@router.post("/sb/{sb_id}/generate")
+def generate(request: Request, sb_id: int, note: str = Form(""), user: User = Depends(current_user),
+             db: Session = Depends(get_db)):
     sb = get_owned(db, Switchboard, sb_id, user)
     try:
-        rev = documents.issue_revision(db, sb, user, note=note.strip())
+        rev = documents.generate_revision(db, sb, user, note=note.strip())
     except ValueError as exc:
         db.rollback()
         flash(request, str(exc), "error")
         return redirect(f"/sb/{sb.id}#vydani")
-    flash(request, f"Vydána revize {rev.number:02d} – dokumenty jsou v archivu.")
+    flash(request, f"Vygenerována revize {rev.number:02d}. Zkontrolujte PDF a pak revizi zamkněte.")
+    return redirect(f"/sb/{sb.id}#vydani")
+
+
+@router.post("/revision/{rev_id}/lock")
+def lock(request: Request, rev_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    rev = db.get(Revision, rev_id)
+    if rev is None:
+        raise HTTPException(404)
+    sb = get_owned(db, Switchboard, rev.switchboard_id, user)
+    try:
+        documents.lock_revision(db, rev, user)
+    except ValueError as exc:
+        db.rollback()
+        flash(request, str(exc), "error")
+        return redirect(f"/sb/{sb.id}#vydani")
+    flash(request, f"Revize {rev.number:02d} zamčena a archivována. Zákazník ji teď vidí přes QR kód.")
     return redirect(f"/sb/{sb.id}#vydani")
 
 

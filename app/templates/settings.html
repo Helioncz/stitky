@@ -54,6 +54,38 @@
   </div>
 </div>
 
+<div class="card" id="stitky">
+  <h2>Arch etiket pro výrobní štítky</h2>
+  <form method="post" action="/settings/label-sheet">
+    <label>Typ archu
+      <select name="preset" id="preset" style="max-width:640px"{% if not user.is_admin %} disabled{% endif %}>
+        {% for key, p in sheet_presets.items() %}<option value="{{ key }}"{% if key == sheet.preset %} selected{% endif %}>{{ p.name }}</option>{% endfor %}
+        <option value="custom"{% if sheet.preset == "custom" %} selected{% endif %}>Vlastní rozměry</option>
+      </select></label>
+    <div class="grid" style="margin-top:10px">
+      {% for f, t in [("cols", "Sloupců"), ("rows", "Řad"), ("label_w", "Šířka etikety [mm]"), ("label_h", "Výška etikety [mm]"),
+                     ("margin_left", "Okraj vlevo [mm]"), ("margin_top", "Okraj nahoře [mm]"), ("gap_x", "Mezera vodorovně [mm]"),
+                     ("gap_y", "Mezera svisle [mm]"), ("page_w", "Šířka listu [mm]"), ("page_h", "Výška listu [mm]")] %}
+      <label>{{ t }}<input name="{{ f }}" data-f="{{ f }}" value="{{ sheet[f]|num }}"{% if not user.is_admin %} disabled{% endif %}></label>
+      {% endfor %}
+      <label>Posun tisku vpravo [mm]<input name="offset_x" value="{{ sheet.offset_x|num }}"{% if not user.is_admin %} disabled{% endif %}></label>
+      <label>Posun tisku dolů [mm]<input name="offset_y" value="{{ sheet.offset_y|num }}"{% if not user.is_admin %} disabled{% endif %}></label>
+    </div>
+    <p class="muted small">Kalibrace: vytiskněte <a href="/settings/label-test.pdf" target="_blank">zkušební arch</a> na obyčejný papír (100 %, bez přizpůsobení),
+      přiložte k archu etiket proti světlu a případnou odchylku zadejte jako posun (záporné číslo = vlevo/nahoru).</p>
+    {% if user.is_admin %}<button class="primary">Uložit arch</button>{% endif %}
+  </form>
+  <script>
+    (function () {
+      const presets = {{ sheet_presets|tojson }};
+      document.getElementById("preset").addEventListener("change", (e) => {
+        const p = presets[e.target.value]; if (!p) return;
+        document.querySelectorAll("#stitky [data-f]").forEach((i) => { i.value = String(p[i.dataset.f]).replace(".", ","); });
+      });
+    })();
+  </script>
+</div>
+
 <div class="card" id="uzivatele">
   <h2>Uživatelé</h2>
   <table class="list small">
