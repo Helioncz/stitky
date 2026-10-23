@@ -1,5 +1,7 @@
 """Rozvaděče: seznam, editace, přístroje, fotky + AI, kusová zkouška, vydání a archiv."""
 import io
+import logging
+import threading
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -8,7 +10,7 @@ from PIL import Image, ImageOps
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.domain import characteristics, standards
 from app.models import Customer, Device, Document, Photo, Revision, Switchboard, User
 from app.security import current_user, get_owned
@@ -16,6 +18,7 @@ from app.services import ai, catalog, documents, proposal, storage
 from app.web import flash, redirect, render, to_float, to_int
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 TEXT_FIELDS = [
     "designation", "type_designation", "name", "site", "order_number", "standard_part", "phases",
@@ -110,7 +113,7 @@ def detail(request: Request, sb_id: int, user: User = Depends(current_user), db:
     stale = bool(open_rev) and documents.data_hash(
         documents.build_snapshot(sb, user.tenant, open_rev.number)) != open_rev.snapshot.get("data_hash")
     return render(request, "switchboard.html", user=user, sb=sb, a=analysis, customers=_customers(db, user),
-                  open_rev=open_rev, stale=stale,
+                  open_rev=open_rev, stale=stale, ai_running=_recognize_running(sb.ai_proposal),
                   rt_rows=[(c, t, rt_items.get(c) or {}) for c, t in standards.ROUTINE_TEST_ITEMS],
                   blocking=characteristics.blocking(analysis.warnings),
                   public_url=documents.public_url(sb))
@@ -263,25 +266,59 @@ def delete_photo(request: Request, photo_id: int, user: User = Depends(current_u
     return redirect(f"/sb/{sb_id}#fotky")
 
 
+RECOGNIZE_STALE_S = 300  # „running“ starší než 5 min = zaseknuté (např. restart serveru)
+
+
+def _recognize_running(prop: dict) -> bool:
+    if (prop or {}).get("status") != "running":
+        return False
+    started = datetime.fromisoformat(prop.get("started"))
+    return (datetime.now(timezone.utc) - started).total_seconds() < RECOGNIZE_STALE_S
+
+
+def _recognize_job(sb_id: int) -> None:
+    """Běží ve vlákně na pozadí – AI trvá desítky sekund a na mobilu by se požadavek přerušil."""
+    db = SessionLocal()
+    try:
+        sb = db.get(Switchboard, sb_id)
+        prev = dict(sb.ai_proposal or {})
+        try:
+            images = [(storage.load(p.storage_key), p.mime_type) for p in sb.photos]
+            result, model = ai.recognize(images)
+            for d in result["devices"]:
+                cat = catalog.lookup(db, sb.tenant_id, d["manufacturer"], d["type_code"])
+                d["catalog"] = bool(cat and cat.verified)
+            sb.ai_proposal = {"status": "done", "model": model, "at": datetime.now(timezone.utc).isoformat(), **result}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Rozpoznání rozvaděče %s selhalo", sb_id)
+            sb.ai_proposal = {**prev, "status": "error", "error": str(exc)[:500]}
+        db.commit()
+    finally:
+        db.close()
+
+
 @router.post("/sb/{sb_id}/recognize")
 def recognize(request: Request, sb_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
     sb = get_owned(db, Switchboard, sb_id, user)
     if not sb.photos:
         flash(request, "Nejdřív nahrajte fotky rozvaděče.", "error")
         return redirect(f"/sb/{sb.id}#fotky")
-    images = [(storage.load(p.storage_key), p.mime_type) for p in sb.photos]
-    try:
-        result, model = ai.recognize(images)
-    except Exception as exc:  # noqa: BLE001
-        flash(request, f"Rozpoznání selhalo: {exc}", "error")
+    if _recognize_running(sb.ai_proposal):
         return redirect(f"/sb/{sb.id}#fotky")
-    for d in result["devices"]:
-        cat = catalog.lookup(db, sb.tenant_id, d["manufacturer"], d["type_code"])
-        d["catalog"] = bool(cat and cat.verified)
-    sb.ai_proposal = {"model": model, "at": datetime.now(timezone.utc).isoformat(), **result}
+    prev = {k: v for k, v in (sb.ai_proposal or {}).items() if k not in ("status", "error", "started")}
+    sb.ai_proposal = {**prev, "status": "running", "started": datetime.now(timezone.utc).isoformat()}
     db.commit()
-    flash(request, f"AI ({model}) navrhla {len(result['devices'])} přístrojů. Zkontrolujte návrh a převezměte ho.")
+    threading.Thread(target=_recognize_job, args=(sb.id,), daemon=True).start()
     return redirect(f"/sb/{sb.id}#fotky")
+
+
+@router.get("/sb/{sb_id}/recognize/status")
+def recognize_status(sb_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    sb = get_owned(db, Switchboard, sb_id, user)
+    prop = sb.ai_proposal or {}
+    status = "running" if _recognize_running(prop) else ("stale" if prop.get("status") == "running" else
+                                                         prop.get("status") or "")
+    return JSONResponse({"status": status})
 
 
 @router.post("/sb/{sb_id}/proposal")

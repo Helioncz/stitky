@@ -110,6 +110,46 @@ def test_photo_upload_and_delete_draft():
     assert c.get(f"/sb/{sb_id}").status_code == 404
 
 
+def test_recognize_runs_in_background(monkeypatch):
+    import time
+
+    from app.services import ai
+
+    calls = {"n": 0}
+
+    def fake(images):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("503 UNAVAILABLE")
+        time.sleep(0.3)
+        return {"devices": [{"row": 1, "kind": "MCB", "manufacturer": "OEZ", "type_code": "LTE B16", "system": "AC",
+                             "designation": "", "is_main": True, "confidence": 0.9}],
+                "rows": {"1": "AC"}, "enclosure": {}, "nameplate": {}, "notes": ""}, "fake-model"
+
+    monkeypatch.setattr(ai, "recognize", fake)
+    c = _client("bg@test.cz")
+    sb_id = _new_sb(c)
+    buf = io.BytesIO()
+    Image.new("RGB", (100, 80), "white").save(buf, "JPEG")
+    c.post(f"/sb/{sb_id}/photos", files=[("files", ("a.jpg", buf.getvalue(), "image/jpeg"))])
+
+    def wait():
+        for _ in range(50):
+            s = c.get(f"/sb/{sb_id}/recognize/status").json()["status"]
+            if s != "running":
+                return s
+            time.sleep(0.1)
+        return "timeout"
+
+    c.post(f"/sb/{sb_id}/recognize")          # vrátí se hned, AI běží na pozadí
+    assert wait() == "error"
+    assert "503 UNAVAILABLE" in c.get(f"/sb/{sb_id}").text
+    c.post(f"/sb/{sb_id}/recognize")
+    assert wait() == "done"
+    page = c.get(f"/sb/{sb_id}").text
+    assert "LTE B16" in page and "fake-model" in page and "Rozpoznání se nepovedlo" not in page
+
+
 def test_proposal_designations_and_feeds(db):
     t, _ = make_tenant(db, email="prop@test.cz")
     sb = make_switchboard(db, t, serial="P-1")

@@ -46,13 +46,33 @@
         <form method="post" action="/photos/{{ p.id }}/delete"><button class="link small">smazat</button></form></figcaption></figure>
     {% endfor %}
   </div>
-  <form method="post" action="/sb/{{ sb.id }}/recognize" style="margin-top:12px" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Rozpoznávám… (až 1 min)'">
+  {% if ai_running %}
+  <div class="flash" style="margin-top:12px;background:#fff1dc;color:var(--warn)">⏳ Rozpoznávám přístroje… obvykle 30–90 s. Stránka se sama obnoví, můžete ji i zavřít a vrátit se.</div>
+  <script>
+    (function poll() {
+      setTimeout(async () => {
+        try {
+          const r = await fetch("/sb/{{ sb.id }}/recognize/status");
+          const s = (await r.json()).status;
+          if (s !== "running") { location.hash = "fotky"; location.reload(); return; }
+        } catch (e) { /* výpadek sítě – zkusíme znovu */ }
+        poll();
+      }, 4000);
+    })();
+  </script>
+  {% else %}
+  <form method="post" action="/sb/{{ sb.id }}/recognize" style="margin-top:12px" onsubmit="this.querySelector('button').disabled=true">
     <button class="primary">Rozpoznat přístroje z fotek (AI)</button>
   </form>
   {% endif %}
+  {% endif %}
 
   {% set prop = sb.ai_proposal or {} %}
-  {% if prop.devices %}
+  {% if prop.status == "error" and not ai_running %}
+  <div class="flash error" style="margin-top:12px">Rozpoznání se nepovedlo: {{ prop.error }}<br>
+    <span class="small">Bývá to přetížením AI u Googlu – zkuste to za chvíli znovu.{% if prop.devices %} Níže je předchozí návrh.{% endif %}</span></div>
+  {% endif %}
+  {% if prop.devices and not ai_running %}
   <h3 style="margin-top:16px">Návrh AI <span class="muted small">({{ prop.model }}, {{ prop.at|czdate }})</span></h3>
   {% set np = prop.nameplate or {} %}
   {% if np.present %}
