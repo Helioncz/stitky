@@ -17,6 +17,9 @@ if _is_sqlite:
     @event.listens_for(engine, "connect")
     def _sqlite_fk(dbapi_conn, _):
         dbapi_conn.execute("PRAGMA foreign_keys=ON")
+        # WAL: čtení neblokuje zápis (víc uživatelů naráz), busy_timeout místo okamžité chyby „database is locked“
+        dbapi_conn.execute("PRAGMA journal_mode=WAL")
+        dbapi_conn.execute("PRAGMA busy_timeout=5000")
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
