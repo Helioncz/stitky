@@ -1,0 +1,34 @@
+@page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+@page landscape { size: A4 landscape; margin: 10mm; }
+* { box-sizing: border-box; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color: #111; margin: 0; line-height: 1.35; }
+h1 { font-size: 16pt; margin: 0 0 2mm; }
+h2 { font-size: 11.5pt; margin: 4.5mm 0 2mm; border-bottom: 0.4mm solid #111; padding-bottom: 1mm; break-after: avoid; }
+h3 { font-size: 10pt; margin: 4mm 0 1.5mm; }
+p { margin: 0 0 2mm; }
+.doc { page-break-after: always; break-after: page; }
+.doc:last-child { page-break-after: auto; break-after: auto; }
+.landscape { page: landscape; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 0.6mm solid #111;
+        padding-bottom: 2.5mm; margin-bottom: 4mm; }
+.head .firm { font-size: 8.5pt; line-height: 1.3; }
+.head .firm b { font-size: 10.5pt; }
+.head img { max-height: 16mm; max-width: 55mm; }
+.head .docid { text-align: right; font-size: 8pt; color: #333; }
+table { border-collapse: collapse; width: 100%; }
+table.grid td, table.grid th { border: 0.25mm solid #777; padding: 1.2mm 2mm; vertical-align: top; text-align: left; }
+table.grid th { background: #eee; font-weight: bold; }
+table.kv td { padding: 1mm 2mm; border-bottom: 0.2mm solid #ccc; vertical-align: top; }
+table.kv td:first-child { width: 55%; color: #333; }
+table.kv td:last-child { font-weight: bold; }
+table.small td, table.small th { font-size: 8pt; padding: 0.8mm 1.5mm; }
+.muted { color: #555; }
+.sign { margin-top: 8mm; display: flex; justify-content: space-between; align-items: flex-end; break-inside: avoid; }
+.sign .line { border-top: 0.3mm solid #111; width: 70mm; text-align: center; padding-top: 1mm; font-size: 8.5pt; }
+.ce { width: 18mm; }
+.warn { border: 0.4mm solid #b00; color: #b00; padding: 2mm; margin: 3mm 0; font-size: 8.5pt; }
+.schema svg { width: 100%; max-height: 150mm; }
+.titleblock { margin-top: 3mm; font-size: 7.5pt; }
+.titleblock td { border: 0.25mm solid #111; padding: 0.8mm 1.5mm; }
+ol, ul { margin: 0 0 2mm; padding-left: 6mm; }
+li { margin-bottom: 1mm; }

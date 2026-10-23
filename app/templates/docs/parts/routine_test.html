@@ -1,0 +1,28 @@
+{% set kind = "routine_test" %}
+<section class="doc">
+{% include "_header.html" %}
+<h1>Protokol o kusové zkoušce</h1>
+<p class="muted">dle {{ s.main_standard }}, čl. 11 · rozvaděč {{ s.sb.designation }}, výr. č. {{ s.sb.serial_number }}</p>
+
+<table class="kv">
+  <tr><td>Datum zkoušky</td><td>{{ s.routine_test.test_date|czdate }}</td></tr>
+  <tr><td>Zkoušel</td><td>{{ s.routine_test.tested_by or "–" }}</td></tr>
+  <tr><td>Měřicí přístroj (typ, v. č., kalibrace)</td><td>{{ s.routine_test.instrument or "–" }}</td></tr>
+  <tr><td>Izolační odpor (500 V DC)</td><td>{{ s.routine_test.insulation_mohm or "–" }} MΩ</td></tr>
+</table>
+
+<h2>Výsledky</h2>
+<table class="grid">
+  <tr><th style="width:10%">Článek</th><th>Zkouška</th><th style="width:22%">Naměřeno / poznámka</th><th style="width:12%">Výsledek</th></tr>
+  {% for r in s.routine_test.rows %}
+  <tr><td>{{ r.code }}</td><td>{{ r.title }}</td><td>{{ r.value }}</td>
+      <td><b>{{ {"OK": "vyhovuje", "NOK": "NEVYHOVUJE", "NA": "netýká se"}.get(r.result, "–") }}</b></td></tr>
+  {% endfor %}
+</table>
+
+<p style="margin-top:4mm">Závěr: rozvaděč <b>{% if s.routine_test.rows|selectattr("result", "equalto", "NOK")|list %}NEVYHOVUJE{% else %}vyhovuje{% endif %}</b>
+  požadavkům kusové zkoušky dle {{ s.main_standard }}.</p>
+<p class="muted">Kusová zkouška nenahrazuje výchozí revizi elektrické instalace dle ČSN 33 2000-6 po připojení rozvaděče v místě užití.</p>
+
+<div class="sign"><div></div><div class="line">{{ s.routine_test.tested_by or "" }}<br><span class="muted">podpis zkoušejícího</span></div></div>
+</section>

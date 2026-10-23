@@ -1,0 +1,22 @@
+<tr{% if d and d.source == "ai" and (d.ai_confidence or 1) < 0.7 %} class="lowconf"{% endif %}>
+  <td><input name="d_designation" value="{{ d.designation if d else '' }}" size="5"></td>
+  <td><input name="d_feeds_from" value="{{ d.feeds_from if d else '' }}" size="5"></td>
+  <td><select name="d_kind">{% for k, t in DEVICE_KINDS.items() %}<option value="{{ k }}"{% if d and d.kind == k %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></td>
+  <td><input name="d_manufacturer" value="{{ d.manufacturer if d else '' }}" size="9"></td>
+  <td><input name="d_type_code" value="{{ d.type_code if d else '' }}" size="16" list="catlist" class="typecode"></td>
+  <td><select name="d_poles">{% for p in ["1", "1+N", "2", "3", "3+N", "4"] %}<option{% if d and d.poles == p %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></td>
+  <td><input name="d_rated_current_a" value="{{ d.rated_current_a|num if d and d.rated_current_a else '' }}" size="4"></td>
+  <td><input name="d_curve" value="{{ d.curve if d else '' }}" size="2"></td>
+  <td><input name="d_breaking_capacity_ka" value="{{ d.breaking_capacity_ka|num if d and d.breaking_capacity_ka else '' }}" size="3"></td>
+  <td><input name="d_residual_ma" value="{{ d.residual_ma|num if d and d.residual_ma else '' }}" size="3"></td>
+  <td><input name="d_rcd_type" value="{{ d.rcd_type if d else '' }}" size="2"></td>
+  <td><input name="d_circuit_label" value="{{ d.circuit_label if d else '' }}" size="16"></td>
+  <td><input name="d_cable" value="{{ d.cable if d else '' }}" size="10"></td>
+  <td><input name="d_phase" value="{{ d.phase if d else '' }}" size="3"></td>
+  <td class="act">
+    <input type="hidden" name="d_source" value="{{ d.source if d else 'manual' }}">
+    <input type="hidden" name="d_ai_confidence" value="{{ d.ai_confidence if d and d.ai_confidence is not none else '' }}">
+    {% if d and d.source != "manual" %}<span class="badge {{ 'ok' if d.source == 'catalog' else 'ai' }}" title="zdroj údajů">{{ d.source }}</span>{% endif %}
+    <button type="button" onclick="moveRow(this,-1)" title="Nahoru">↑</button><button type="button" onclick="moveRow(this,1)" title="Dolů">↓</button><button type="button" onclick="this.closest('tr').remove()" title="Odebrat">✕</button>
+  </td>
+</tr>

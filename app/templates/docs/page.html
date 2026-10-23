@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><title>{{ titles[kind] }} – {{ s.sb.serial_number }}</title>
+<style>{% include "_style.css" %}</style></head>
+<body>
+{% include "parts/" ~ kind ~ ".html" %}
+</body></html>

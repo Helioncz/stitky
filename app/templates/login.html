@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Přihlášení{% endblock %}
+{% block content %}
+<div class="auth">
+  <h1>Štítky</h1>
+  <p class="muted">Povinná dokumentace rozvaděčů NN</p>
+  <form class="card" method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>E-mail<input type="email" name="email" required autofocus autocomplete="username"></label>
+    <label>Heslo<input type="password" name="password" required autocomplete="current-password"></label>
+    <button class="primary" style="width:100%">Přihlásit</button>
+  </form>
+  {% if allow_signup %}<p class="small">Nová firma? <a href="/signup">Založit účet</a></p>{% endif %}
+</div>
+{% endblock %}

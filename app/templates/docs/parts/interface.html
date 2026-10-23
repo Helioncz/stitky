@@ -1,0 +1,48 @@
+{% set kind = "interface" %}
+<section class="doc">
+{% include "_header.html" %}
+<h1>Charakteristiky rozhraní</h1>
+<p class="muted">dle {{ s.main_standard }}, čl. 5 a příloha C · {{ s.sb.standard_label }}</p>
+
+<h2>Elektrické charakteristiky</h2>
+<table class="kv">
+  <tr><td>Jmenovité napětí sestavy Un</td><td>{{ s.sb.un_v|num }} V AC</td></tr>
+  <tr><td>Jmenovité pracovní napětí obvodu Ue</td><td>{{ s.sb.ue_v|num }} V AC</td></tr>
+  <tr><td>Jmenovité izolační napětí Ui</td><td>{{ s.sb.ui_v|num }} V</td></tr>
+  <tr><td>Jmenovité impulzní výdržné napětí Uimp</td><td>{{ s.sb.uimp_kv|num }} kV</td></tr>
+  <tr><td>Jmenovitý kmitočet fn</td><td>{{ s.sb.fn_hz|num }} Hz</td></tr>
+  <tr><td>Soustava / typ uzemnění sítě</td><td>{{ s.sb.phases }} / {{ s.sb.earthing_system }}</td></tr>
+  <tr><td>Jmenovitý proud sestavy InA</td><td>{{ s.sb.ina_a|num }} A</td></tr>
+  <tr><td>Jmenovitý podmíněný zkratový proud Icc</td><td>{{ s.sb.icc_ka|num }} kA</td></tr>
+  {% if s.sb.icw_ka %}<tr><td>Jmenovitý krátkodobý výdržný proud Icw</td><td>{{ s.sb.icw_ka|num }} kA / 1 s</td></tr>{% endif %}
+  {% if s.sb.ipk_ka %}<tr><td>Jmenovitý vrcholový výdržný proud Ipk</td><td>{{ s.sb.ipk_ka|num }} kA</td></tr>{% endif %}
+  <tr><td>Jmenovitý součinitel soudobosti RDF</td><td>{{ s.sb.rdf|num }} ({{ s.sb.outgoing_count }} vývodů)</td></tr>
+  <tr><td>Přívodní vedení</td><td>{{ s.sb.supply_cable or "–" }}</td></tr>
+  <tr><td>Hlavní přístroj</td><td>{{ s.sb.main_device or "–" }}</td></tr>
+</table>
+
+<h2>Konstrukce a prostředí</h2>
+<table class="kv">
+  <tr><td>Stupeň krytí (zavřeno / otevřené dveře)</td><td>{{ s.sb.ip_code }} / {{ s.sb.ip_code_open }}</td></tr>
+  <tr><td>Odolnost proti mechanickým nárazům</td><td>{{ s.sb.ik_code }}</td></tr>
+  <tr><td>Třída ochrany</td><td>{{ s.sb.protection_class }}</td></tr>
+  <tr><td>Umístění / instalace / montáž</td><td>{{ s.sb.location }} / {{ s.sb.installation }} / {{ s.sb.mounting }}</td></tr>
+  <tr><td>Stupeň znečištění</td><td>{{ s.sb.pollution_degree|num }}</td></tr>
+  <tr><td>Prostředí EMC</td><td>{{ s.sb.emc_environment }}</td></tr>
+  <tr><td>Forma vnitřního oddělení</td><td>{{ s.sb.internal_form }}</td></tr>
+  <tr><td>Obsluha</td><td>{{ s.sb.operated_by }}</td></tr>
+  <tr><td>Skříň (výrobce / typ)</td><td>{{ s.sb.enclosure_manufacturer or "–" }} / {{ s.sb.enclosure_type or "–" }}</td></tr>
+  <tr><td>Rozměry š × v × h</td><td>{{ s.sb.width_mm|num }} × {{ s.sb.height_mm|num }} × {{ s.sb.depth_mm|num }} mm</td></tr>
+  <tr><td>Hmotnost</td><td>{{ s.sb.weight_kg|num }} kg</td></tr>
+</table>
+
+<h2>Vývody a osazené přístroje</h2>
+<table class="grid small">
+  <tr><th>Ozn.</th><th>Napájeno z</th><th>Přístroj</th><th>Výrobce / typ</th><th>Parametry (Inc)</th><th>Vývod</th><th>Kabel</th><th>Fáze</th></tr>
+  {% for d in s.devices %}
+  <tr><td>{{ d.designation }}</td><td>{{ d.feeds_from }}</td><td>{{ d.kind_label }}</td><td>{{ d.manufacturer }} {{ d.type_code }}</td>
+      <td>{{ d.rating_text }}</td><td>{{ d.circuit_label }}</td><td>{{ d.cable }}</td><td>{{ d.phase }}</td></tr>
+  {% endfor %}
+</table>
+{% if s.sb.notes %}<h3>Poznámky</h3><p>{{ s.sb.notes }}</p>{% endif %}
+</section>

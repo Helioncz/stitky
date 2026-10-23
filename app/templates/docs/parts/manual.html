@@ -1,0 +1,67 @@
+{% set kind = "manual" %}
+{% set laik = s.sb.operated_by == "laik" %}
+<section class="doc">
+{% include "_header.html" %}
+<h1>Návod k použití a montáži</h1>
+<p class="muted">Rozvaděč {{ s.sb.designation }}{% if s.sb.name %} – {{ s.sb.name }}{% endif %}, výr. č. {{ s.sb.serial_number }} ·
+  {{ s.sb.standard_label }} dle {{ s.main_standard }}</p>
+
+<h2>1. Bezpečnostní upozornění</h2>
+<ul>
+  <li>Montáž, připojení, údržbu a opravy smí provádět pouze osoba s odbornou způsobilostí v elektrotechnice
+      (znalá osoba dle nařízení vlády č. 194/2022 Sb.). Práce provádějte v beznapěťovém stavu.</li>
+  <li>Rozvaděč je určen k obsluze {% if laik %}osobami bez elektrotechnické kvalifikace (laiky) – obsluha smí pouze ovládat
+      jisticí a spínací přístroje a zkoušet chrániče tlačítkem „T“{% else %}osobami poučenými nebo znalými{% endif %}.
+      Neodstraňujte kryty a víka přístrojů.</li>
+  <li>Při zásahu ochrany zjistěte a odstraňte příčinu. Opakované vypínání hlásí poruchu – přivolejte elektrikáře.</li>
+  <li>Rozvaděč nepoužívejte, je-li poškozený kryt, dveře nebo přístroje, nebo nese-li stopy přehřátí či vlhkosti.</li>
+</ul>
+
+<h2>2. Technické údaje</h2>
+<p>Un {{ s.sb.un_v|num }} V, {{ s.sb.fn_hz|num }} Hz, {{ s.sb.phases }}, síť {{ s.sb.earthing_system }}, InA {{ s.sb.ina_a|num }} A,
+  Icc {{ s.sb.icc_ka|num }} kA, krytí {{ s.sb.ip_code }} ({{ s.sb.ip_code_open }} s otevřenými dveřmi), {{ s.sb.ik_code }},
+  třída ochrany {{ s.sb.protection_class }}, umístění {{ s.sb.location }}, stupeň znečištění {{ s.sb.pollution_degree|num }}.
+  Podrobně viz dokument Charakteristiky rozhraní.</p>
+
+<h2>3. Doprava a skladování</h2>
+<p>Přepravujte v původní poloze, chraňte před pádem, nárazy a vlhkostí. Skladujte v suchém prostředí
+  při teplotě −25 °C až +55 °C. Před instalací zkontrolujte, zda rozvaděč nebyl poškozen.</p>
+
+<h2>4. Montáž</h2>
+<ol>
+  <li>Umístění: {{ s.sb.location }} prostředí, montáž {{ s.sb.mounting }}. Okolní teplota −5 °C až +40 °C
+      (průměr za 24 h max. +35 °C), bez přímého slunce a zdrojů tepla. Zachovejte přístup ke dveřím a volný prostor pro chlazení.</li>
+  <li>Skříň upevněte na rovný nosný podklad pomocí upevňovacích bodů {% if s.sb.enclosure_manufacturer %}dle návodu výrobce skříně
+      ({{ s.sb.enclosure_manufacturer }} {{ s.sb.enclosure_type }}){% else %}skříně{% endif %}. Nenarušte stupeň krytí – kabelové vstupy
+      utěsněte vývodkami nebo průchodkami odpovídajícího krytí.</li>
+  <li>Přívod{% if s.sb.supply_cable %} ({{ s.sb.supply_cable }}){% endif %} připojte na svorky hlavního přístroje {{ s.sb.main_device }}.
+      Průřez a jištění přívodu musí odpovídat InA {{ s.sb.ina_a|num }} A a zkratovým poměrům v místě připojení – předřazený
+      jistič nebo pojistka musí zajistit, že zkratový proud nepřekročí Icc {{ s.sb.icc_ka|num }} kA.</li>
+  <li>Ochranný vodič připojte na svorku PE{% if s.sb.earthing_system == "TN-C-S" %}; rozdělení PEN na PE a N proveďte v tomto
+      rozvaděči podle schématu – za místem rozdělení již N a PE nespojujte{% endif %}.</li>
+  <li>Vývody připojte podle schématu zapojení. Svorky dotáhněte momentem předepsaným výrobcem přístrojů.</li>
+  <li>Po montáži odstraňte nečistoty, nasaďte všechny kryty a zaslepte neobsazené pozice záslepkami.</li>
+</ol>
+
+<h2>5. Uvedení do provozu</h2>
+<p>Před prvním zapnutím musí být provedena <b>výchozí revize</b> elektrické instalace dle ČSN 33 2000-6 a vystavena revizní
+  zpráva. Zapínejte postupně: hlavní přístroj, chrániče, jističe vývodů. Ověřte funkci chráničů tlačítkem „T“.</p>
+
+<h2>6. Obsluha a údržba</h2>
+<ul>
+  <li>Chrániče zkoušejte tlačítkem „T“ minimálně 1× za 6 měsíců (nebo dle výrobce přístroje).</li>
+  <li>Udržujte rozvaděč čistý a suchý, dveře zavřené. Čistěte pouze suchým hadříkem, bez rozpouštědel.</li>
+  <li>Kontrolu dotažení spojů, stavu přístrojů a ochranných obvodů provádějte při pravidelných revizích
+      dle ČSN 33 1500 a ČSN 33 2000-6 (lhůty dle prostředí, obvykle 2–5 let).</li>
+  <li>Při výměně přístroje použijte přístroj se stejnými nebo lepšími parametry (In, charakteristika, Icn, IΔn, typ) –
+      jinak může přestat platit toto prohlášení o shodě. Změny konzultujte s výrobcem rozvaděče.</li>
+</ul>
+
+<h2>7. Likvidace</h2>
+<p>Rozvaděč a přístroje jsou elektroodpad – po skončení životnosti je odevzdejte na místo zpětného odběru
+  elektrozařízení. Nevyhazujte do směsného odpadu.</p>
+
+<h2>8. Výrobce a servis</h2>
+<p>{{ s.tenant.name }}, {{ s.tenant.address_line }}{% if s.tenant.phone %}, tel. {{ s.tenant.phone }}{% endif %}{% if s.tenant.email %}, {{ s.tenant.email }}{% endif %}.
+  Aktuální dokumentace k tomuto rozvaděči: {{ s.public_url }}</p>
+</section>

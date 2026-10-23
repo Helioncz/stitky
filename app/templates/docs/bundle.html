@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><title>Dokumentace rozvaděče {{ s.sb.serial_number }}</title>
+<style>{% include "_style.css" %}</style></head>
+<body>
+{% for kind in kinds %}
+{% include "parts/" ~ kind ~ ".html" %}
+{% endfor %}
+</body></html>

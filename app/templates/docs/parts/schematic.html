@@ -1,0 +1,17 @@
+{% set kind = "schematic" %}
+<section class="doc landscape">
+<div class="schema">{{ s.schematic_svg|safe }}</div>
+<table class="titleblock">
+  <tr>
+    <td rowspan="2" style="width:30%">{% if s.tenant.logo %}<img src="{{ s.tenant.logo }}" style="max-height:9mm" alt=""><br>{% endif %}<b>{{ s.tenant.name }}</b><br>{{ s.tenant.address_line }}</td>
+    <td style="width:30%">Akce: <b>{{ s.sb.site or "–" }}</b></td>
+    <td>Rozvaděč: <b>{{ s.sb.designation }}</b> {{ s.sb.name }}</td>
+    <td>Výr. č.: <b>{{ s.sb.serial_number }}</b></td>
+  </tr>
+  <tr>
+    <td>Výkres: <b>Jednopólové schéma zapojení</b></td>
+    <td>Revize: <b>{% if s.revision is not none %}{{ "%02d"|format(s.revision) }}{% else %}náhled{% endif %}</b> · Datum: {{ s.issued_at|czdate }}</td>
+    <td>Vypracoval: {{ s.issued_by or "–" }}</td>
+  </tr>
+</table>
+</section>

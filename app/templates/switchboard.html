@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}{{ sb.serial_number }}{% endblock %}
+
+{% macro inp(name, label, value, type="text", cls="", step=None, list=None) -%}
+<label class="{{ cls }}">{{ label }}<input name="{{ name }}" type="{{ type }}" value="{{ value if value is not none else '' }}"{% if step %} step="{{ step }}"{% endif %}{% if list %} list="{{ list }}"{% endif %}></label>
+{%- endmacro %}
+{% macro sel(name, label, value, options, cls="") -%}
+<label class="{{ cls }}">{{ label }}<select name="{{ name }}">
+  {% for opt in options %}{% set v = opt[0] if opt is not string else opt %}{% set t = opt[1] if opt is not string else opt %}
+  <option value="{{ v }}"{% if v == value %} selected{% endif %}>{{ t }}</option>{% endfor %}
+</select></label>
+{%- endmacro %}
+
+{% block content %}
+<div class="row">
+  <h1>{{ sb.serial_number }} · {{ sb.designation }} <span class="muted" style="font-weight:400">{{ sb.name }}</span></h1>
+  {% if sb.latest_revision %}<span class="badge ok">vydáno rev. {{ "%02d"|format(sb.latest_revision.number) }}</span>{% else %}<span class="badge">koncept</span>{% endif %}
+  <span class="spacer"></span>
+  <a class="btn" href="/sb/{{ sb.id }}/preview/bundle" target="_blank">Náhled dokumentace</a>
+  <form method="post" action="/sb/{{ sb.id }}/copy"><button title="Nový rozvaděč se stejnými údaji a přístroji">Kopírovat</button></form>
+  {% if not sb.revisions %}<form method="post" action="/sb/{{ sb.id }}/delete" onsubmit="return confirm('Smazat koncept rozvaděče?')"><button class="danger">Smazat</button></form>{% endif %}
+</div>
+
+<nav class="subnav">
+  <a href="#fotky">1 Fotky a AI</a><a href="#pristroje">2 Přístroje ({{ sb.devices|length }})</a>
+  <a href="#udaje">3 Údaje a charakteristiky</a><a href="#zkouska">4 Kusová zkouška</a>
+  <a href="#vydani">5 Kontrola a vydání{% if a.warnings %} ⚠ {{ a.warnings|length }}{% endif %}</a>
+</nav>
+
+{# ── 1. Fotky a AI ───────────────────────────────────────── #}
+<section class="card" id="fotky">
+  <h2>1 · Fotky rozvaděče a rozpoznání přístrojů</h2>
+  <form method="post" action="/sb/{{ sb.id }}/photos" enctype="multipart/form-data" class="row">
+    <input type="file" name="files" accept="image/*" multiple required style="max-width:360px">
+    <button>Nahrát fotky</button>
+    <span class="muted small">Foťte zepředu, kolmo, s odklopeným krytem – aby byly čitelné popisky přístrojů. Velký rozvaděč klidně na víc fotek.</span>
+  </form>
+  {% if sb.photos %}
+  <div class="photos" style="margin-top:12px">
+    {% for p in sb.photos %}
+    <figure><a href="/photos/{{ p.id }}" target="_blank"><img src="/photos/{{ p.id }}" alt="" loading="lazy"></a>
+      <figcaption class="row small"><span class="muted">{{ p.uploaded_at|czdate }}</span><span class="spacer"></span>
+        <form method="post" action="/photos/{{ p.id }}/delete"><button class="link small">smazat</button></form></figcaption></figure>
+    {% endfor %}
+  </div>
+  <form method="post" action="/sb/{{ sb.id }}/recognize" style="margin-top:12px" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Rozpoznávám… (až 1 min)'">
+    <button class="primary">Rozpoznat přístroje z fotek (AI)</button>
+  </form>
+  {% endif %}
+
+  {% set prop = sb.ai_proposal or {} %}
+  {% if prop.devices %}
+  <h3 style="margin-top:16px">Návrh AI <span class="muted small">({{ prop.model }}, {{ prop.at|czdate }})</span></h3>
+  <div class="scroll"><table class="list small">
+    <tr><th>#</th><th>Lišta</th><th>Druh</th><th>Výrobce</th><th>Typ</th><th>Póly</th><th>In</th><th>Char.</th><th>Icn kA</th><th>IΔn</th><th>Vývod</th><th>Jistota</th><th>Poznámka</th></tr>
+    {% for d in prop.devices %}
+    <tr class="{{ 'lowconf' if (d.confidence or 0) < 0.7 }}">
+      <td>{{ loop.index }}</td><td>{{ d.row or "" }}</td><td>{{ DEVICE_KINDS.get(d.kind, d.kind) }}</td><td>{{ d.manufacturer }}</td>
+      <td>{{ d.type_code }}{% if d.catalog %} <span class="badge ok">katalog</span>{% endif %}</td><td>{{ d.poles }}</td>
+      <td>{{ d.rated_current_a|num }}</td><td>{{ d.curve }}</td><td>{{ d.breaking_capacity_ka|num }}</td>
+      <td>{{ d.residual_ma|num if d.residual_ma else "" }} {{ d.rcd_type }}</td><td>{{ d.circuit_label }}</td>
+      <td>{{ ((d.confidence or 0) * 100)|round|int }} %</td><td class="muted">{{ d.note }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <form method="post" action="/sb/{{ sb.id }}/proposal" class="row" style="margin-top:10px">
+    <button class="primary" name="mode" value="replace" {% if sb.devices %}onclick="return confirm('Nahradit současných {{ sb.devices|length }} přístrojů návrhem AI?')"{% endif %}>Převzít do přístrojů (nahradit)</button>
+    {% if sb.devices %}<button name="mode" value="append">Přidat k současným</button>{% endif %}
+    <span class="muted small">Žlutě = nízká jistota, zkontrolujte. U přístrojů z katalogu se použijí ověřené parametry.</span>
+  </form>
+  {% endif %}
+</section>
+
+{# ── 2. Přístroje ────────────────────────────────────────── #}
+<section class="card" id="pristroje">
+  <h2>2 · Osazené přístroje</h2>
+  <p class="muted small">„Napájeno z“ = označení nadřazeného přístroje (např. jističe za chráničem -F1). Hlavní přístroj nechte prázdný. Z toho se kreslí schéma.
+    Typ přístroje se našeptává z katalogu – vybráním se doplní parametry.</p>
+  <form method="post" action="/sb/{{ sb.id }}/devices" id="devform">
+  <div class="scroll"><table class="devices" id="devtable">
+    <thead><tr><th>Ozn.</th><th>Napájeno z</th><th>Druh</th><th>Výrobce</th><th>Typ</th><th>Póly</th><th>In [A]</th><th>Char.</th><th>Icn [kA]</th><th>IΔn [mA]</th><th>Typ RCD</th><th>Vývod (popis)</th><th>Kabel</th><th>Fáze</th><th></th></tr></thead>
+    <tbody>
+    {% for d in sb.devices %}{% include "_device_row.html" %}{% endfor %}
+    </tbody>
+  </table></div>
+  <template id="devrow">{% with d=None %}{% include "_device_row.html" %}{% endwith %}</template>
+  <datalist id="catlist"></datalist>
+  <div class="row" style="margin-top:10px">
+    <button type="button" onclick="addDeviceRow()">+ Přidat přístroj</button>
+    <span class="spacer"></span>
+    <button class="primary">Uložit přístroje</button>
+  </div>
+  </form>
+</section>
+
+{# ── 3. Údaje ────────────────────────────────────────────── #}
+<section class="card" id="udaje">
+  <h2>3 · Údaje rozvaděče a charakteristiky rozhraní</h2>
+  {% if a.suggested_ina or a.suggested_icc or a.suggested_rdf %}
+  <form method="post" action="/sb/{{ sb.id }}/suggestions" class="row small" style="margin-bottom:10px">
+    <span>Návrh z přístrojů: InA <b>{{ a.suggested_ina|num }} A</b> (hlavní přístroj), Icc <b>{{ a.suggested_icc|num }} kA</b> (nejnižší Icn),
+      RDF <b>{{ a.suggested_rdf|num }}</b> ({{ a.outgoing|length }} vývodů, tab. 101)</span>
+    <button>Převzít návrh</button>
+  </form>
+  {% endif %}
+  <form method="post" action="/sb/{{ sb.id }}">
+    <fieldset><legend>Identifikace</legend><div class="grid">
+      {{ inp("serial_number", "Výrobní číslo", sb.serial_number) }}
+      {{ inp("designation", "Označení (RH, RD, R1…)", sb.designation) }}
+      {{ inp("type_designation", "Typové označení", sb.type_designation) }}
+      {{ inp("name", "Popis", sb.name, cls="wide") }}
+      {{ inp("site", "Akce / místo instalace", sb.site, cls="wide") }}
+      {{ inp("order_number", "Číslo zakázky", sb.order_number) }}
+      {{ inp("manufacture_date", "Datum výroby", sb.manufacture_date.isoformat() if sb.manufacture_date else "", type="date") }}
+      {{ inp("customer_name", "Zákazník (odběratel)", sb.customer.name if sb.customer else "", list="customers", cls="wide") }}
+      {{ inp("customer_address", "Adresa zákazníka", sb.customer.address if sb.customer else "", cls="wide") }}
+      {{ sel("standard_part", "Druh sestavy", sb.standard_part, [("3", "Rozvodnice pro laiky – DBO (61439-3)"), ("2", "Výkonový rozvaděč – PSC (61439-2)")], cls="wide") }}
+    </div>
+    <datalist id="customers">{% for c in customers %}<option value="{{ c.name }}">{% endfor %}</datalist>
+    </fieldset>
+
+    <fieldset><legend>Elektrické charakteristiky</legend><div class="grid">
+      {{ inp("un_v", "Un [V]", sb.un_v, "number", step="any") }}
+      {{ inp("ue_v", "Ue [V]", sb.ue_v, "number", step="any") }}
+      {{ inp("ui_v", "Ui [V]", sb.ui_v, "number", step="any") }}
+      {{ inp("uimp_kv", "Uimp [kV]", sb.uimp_kv, "number", step="any") }}
+      {{ inp("fn_hz", "fn [Hz]", sb.fn_hz, "number", step="any") }}
+      {{ sel("phases", "Soustava", sb.phases, ["3+N+PE", "3+PEN", "1+N+PE", "3+PE"]) }}
+      {{ sel("earthing_system", "Síť", sb.earthing_system, ["TN-C-S", "TN-S", "TN-C", "TT", "IT"]) }}
+      {{ inp("ina_a", "InA – proud sestavy [A]", sb.ina_a, "number", step="any") }}
+      {{ inp("icc_ka", "Icc – podm. zkrat. proud [kA]", sb.icc_ka, "number", step="any") }}
+      {% if sb.standard_part == "2" %}
+      {{ inp("icw_ka", "Icw [kA/1 s]", sb.icw_ka, "number", step="any") }}
+      {{ inp("ipk_ka", "Ipk [kA]", sb.ipk_ka, "number", step="any") }}
+      {% endif %}
+      {{ inp("rdf", "RDF – součinitel soudobosti", sb.rdf, "number", step="any") }}
+      {{ inp("supply_cable", "Přívodní kabel", sb.supply_cable) }}
+    </div></fieldset>
+
+    <fieldset><legend>Konstrukce a prostředí</legend><div class="grid">
+      {{ inp("enclosure_manufacturer", "Skříň – výrobce", sb.enclosure_manufacturer) }}
+      {{ inp("enclosure_type", "Skříň – typ", sb.enclosure_type) }}
+      {{ inp("ip_code", "IP zavřeno", sb.ip_code) }}
+      {{ inp("ip_code_open", "IP otevřené dveře", sb.ip_code_open) }}
+      {{ inp("ik_code", "IK", sb.ik_code) }}
+      {{ sel("protection_class", "Třída ochrany", sb.protection_class, ["I", "II"]) }}
+      {{ sel("location", "Umístění", sb.location, ["vnitřní", "venkovní"]) }}
+      {{ sel("installation", "Instalace", sb.installation, ["pevná", "přemístitelná"]) }}
+      {{ sel("mounting", "Montáž", sb.mounting, ["nástěnná", "zapuštěná", "stojanová", "na sloupku/pilíři"]) }}
+      {{ sel("pollution_degree", "Stupeň znečištění", sb.pollution_degree|string, ["2", "3"]) }}
+      {{ sel("emc_environment", "Prostředí EMC", sb.emc_environment, ["A/B", "A", "B"]) }}
+      {{ sel("internal_form", "Forma vnitř. oddělení", sb.internal_form, ["1", "2a", "2b", "3a", "3b", "4a", "4b"]) }}
+      {{ sel("operated_by", "Obsluha", sb.operated_by, ["laik", "poučená osoba", "znalá osoba"]) }}
+      {{ inp("width_mm", "Šířka [mm]", sb.width_mm, "number") }}
+      {{ inp("height_mm", "Výška [mm]", sb.height_mm, "number") }}
+      {{ inp("depth_mm", "Hloubka [mm]", sb.depth_mm, "number") }}
+      {{ inp("weight_kg", "Hmotnost [kg]", sb.weight_kg, "number", step="any") }}
+    </div>
+    <label style="margin-top:10px">Poznámky (objeví se v charakteristikách rozhraní)<textarea name="notes">{{ sb.notes }}</textarea></label>
+    </fieldset>
+    <button class="primary">Uložit údaje</button>
+  </form>
+</section>
+
+{# ── 4. Kusová zkouška ───────────────────────────────────── #}
+{% set rt = sb.routine_test or {} %}
+<section class="card" id="zkouska">
+  <h2>4 · Kusová zkouška (ČSN EN IEC 61439-1 čl. 11)</h2>
+  <form method="post" action="/sb/{{ sb.id }}/routine-test">
+    <div class="grid">
+      {{ inp("test_date", "Datum zkoušky", rt.test_date, "date") }}
+      {{ inp("tested_by", "Zkoušel", rt.tested_by) }}
+      {{ inp("instrument", "Měřicí přístroj (typ, v. č.)", rt.instrument, cls="wide") }}
+      {{ inp("insulation_mohm", "Izolační odpor [MΩ]", rt.insulation_mohm) }}
+    </div>
+    <div class="scroll"><table class="list small" style="margin-top:10px">
+      <tr><th>Čl.</th><th>Zkouška</th><th>Výsledek</th><th>Naměřeno / poznámka</th></tr>
+      {% for code, title, it in rt_rows %}
+      <tr><td>{{ code }}</td><td>{{ title }}</td>
+        <td><select name="r_{{ code }}">{% for v, t in [("", "–"), ("OK", "vyhovuje"), ("NOK", "nevyhovuje"), ("NA", "netýká se")] %}<option value="{{ v }}"{% if it.result == v %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></td>
+        <td><input name="v_{{ code }}" value="{{ it.value or '' }}"></td></tr>
+      {% endfor %}
+    </table></div>
+    <div class="row" style="margin-top:10px">
+      <button type="button" onclick="document.querySelectorAll('#zkouska select').forEach(s=>{if(!s.value)s.value='OK'})">Vše nevyplněné = vyhovuje</button>
+      <span class="spacer"></span><button class="primary">Uložit zkoušku</button>
+    </div>
+  </form>
+</section>
+
+{# ── 5. Kontrola a vydání ────────────────────────────────── #}
+<section class="card" id="vydani">
+  <h2>5 · Kontrola a vydání dokumentace</h2>
+  {% if a.warnings %}
+  <ul class="warnings">{% for w in a.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  {% else %}<p style="color:var(--ok)">✓ Kontrola bez připomínek.</p>{% endif %}
+
+  <p class="small" style="margin-top:12px">Náhledy (aktuální koncept):
+    {% for k in ["eu_doc", "interface", "schematic", "routine_test", "manual", "label"] %}
+    <a href="/sb/{{ sb.id }}/preview/{{ k }}" target="_blank">{{ DOCUMENT_KINDS[k] }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+
+  <form method="post" action="/sb/{{ sb.id }}/issue" class="row" style="margin-top:8px"
+        onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Generuji PDF…'">
+    <input name="note" placeholder="Poznámka k revizi (např. výměna -F3 za 20 A)" style="max-width:420px">
+    <button class="primary" {% if blocking %}disabled title="Nejdřív vyřešte blokující připomínky"{% endif %}>
+      Vydat {{ "revizi %02d"|format(sb.revisions|length) }} (zamknout a vygenerovat PDF)</button>
+  </form>
+  <p class="muted small">Vydaná revize je neměnná a archivovaná (PDF + otisk SHA-256). Další změna = nová revize. Prohlášení uchovávejte 10 let.</p>
+
+  {% if sb.revisions %}
+  <h3>Archiv revizí</h3>
+  <table class="list small">
+    <tr><th>Rev.</th><th>Vydáno</th><th>Vydal</th><th>Poznámka</th><th>Dokumenty</th></tr>
+    {% for r in sb.revisions|reverse %}
+    <tr><td><b>{{ "%02d"|format(r.number) }}</b></td><td>{{ r.issued_at|czdate }}</td><td>{{ r.issued_by.name if r.issued_by else "" }}</td><td>{{ r.note }}</td>
+      <td class="docs">{% for d in r.documents|sort(attribute="id") %}<a href="/doc/{{ d.id }}" target="_blank" title="SHA-256 {{ d.sha256 }}">{{ d.kind_label }}</a>{% endfor %}</td></tr>
+    {% endfor %}
+  </table>
+  <p class="small">Veřejný odkaz pro zákazníka (QR na štítku): <a href="{{ public_url }}" target="_blank">{{ public_url }}</a></p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% set kind = "eu_doc" %}
+<section class="doc">
+{% include "_header.html" %}
+<h1>EU prohlášení o shodě</h1>
+<p class="muted">č. {{ s.sb.serial_number }}{% if s.revision is not none %}/{{ "%02d"|format(s.revision) }}{% endif %}
+  · dle přílohy IV směrnice 2014/35/EU a zákona č. 90/2016 Sb.</p>
+
+<h2>1. Výrobek</h2>
+<table class="kv">
+  <tr><td>Název výrobku</td><td>Rozvaděč nízkého napětí – {{ s.sb.standard_label }}{% if s.sb.name %}, {{ s.sb.name }}{% endif %}</td></tr>
+  <tr><td>Označení / typ</td><td>{{ s.sb.designation }}{% if s.sb.type_designation %} / {{ s.sb.type_designation }}{% endif %}</td></tr>
+  <tr><td>Výrobní číslo</td><td>{{ s.sb.serial_number }}</td></tr>
+  <tr><td>Datum výroby</td><td>{{ s.sb.manufacture_date|czdate }}</td></tr>
+  {% if s.sb.site %}<tr><td>Místo instalace</td><td>{{ s.sb.site }}</td></tr>{% endif %}
+  {% if s.sb.customer %}<tr><td>Odběratel</td><td>{{ s.sb.customer.name }}{% if s.sb.customer.address %}, {{ s.sb.customer.address }}{% endif %}</td></tr>{% endif %}
+  <tr><td>Základní parametry</td><td>Un {{ s.sb.un_v|num }} V, {{ s.sb.fn_hz|num }} Hz, {{ s.sb.phases }}, InA {{ s.sb.ina_a|num }} A,
+      Icc {{ s.sb.icc_ka|num }} kA, {{ s.sb.ip_code }}, síť {{ s.sb.earthing_system }}</td></tr>
+</table>
+
+<h2>2. Výrobce</h2>
+<p><b>{{ s.tenant.name }}</b>, {{ s.tenant.address_line }}{% if s.tenant.country %}, {{ s.tenant.country }}{% endif %}{% if s.tenant.ico %}, IČO {{ s.tenant.ico }}{% endif %}</p>
+
+<h2>3. Prohlášení</h2>
+<p>Toto prohlášení o shodě se vydává na výhradní odpovědnost výrobce.</p>
+<p>Výše popsaný předmět prohlášení je ve shodě s příslušnými harmonizačními právními předpisy Unie:</p>
+<ul>
+{% for d in s.directives %}<li>{{ d.eu }} – v ČR {{ d.cz }}</li>{% endfor %}
+</ul>
+
+<h2>4. Harmonizované normy</h2>
+<table class="grid small">
+  <tr><th style="width:35%">Norma</th><th>Název</th><th style="width:18%">Směrnice</th></tr>
+  {% for n in s.standards %}<tr><td>{{ n.code }}</td><td>{{ n.title }}</td><td>{{ n.directives|join(", ") }}</td></tr>{% endfor %}
+</table>
+
+<h2>5. Další informace</h2>
+<p>Posouzení shody: vnitřní řízení výroby (modul A). Ověření návrhu bylo provedeno dle {{ s.main_standard }}
+  čl. 10 (ověření výpočtem, porovnáním s referenčním návrhem a/nebo údaji výrobců přístrojů a skříně),
+  kusová zkouška dle čl. 11 – viz Protokol o kusové zkoušce k výr. č. {{ s.sb.serial_number }}.
+  Součástí dodávky je technická dokumentace: charakteristiky rozhraní, schéma zapojení a návod k použití a montáži.</p>
+
+<div class="sign">
+  <div>
+    Místo a datum vydání: <b>{{ s.tenant.issue_place or s.tenant.city }}, {{ s.issued_at|czdate }}</b><br>
+    <div class="ce">{{ s.ce_svg|safe }}</div>
+  </div>
+  <div class="line">
+    {{ s.tenant.signer_name }}<br>{{ s.tenant.signer_position }}<br><span class="muted">podepsáno za a jménem výrobce</span>
+  </div>
+</div>
+</section>

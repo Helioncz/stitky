@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Nastavení{% endblock %}
+{% macro inp(name, label, value, cls="", type="text") -%}
+<label class="{{ cls }}">{{ label }}<input name="{{ name }}" type="{{ type }}" value="{{ value if value is not none else '' }}"{% if not user.is_admin %} disabled{% endif %}></label>
+{%- endmacro %}
+{% block content %}
+<h1>Nastavení firmy</h1>
+
+<form class="card" method="post" action="/settings">
+  <h2>Výrobce rozvaděčů (uvádí se na všech dokumentech)</h2>
+  <div class="grid">
+    {{ inp("name", "Obchodní firma", t.name, "wide") }}
+    {{ inp("ico", "IČO", t.ico) }}
+    {{ inp("dic", "DIČ", t.dic) }}
+    {{ inp("street", "Ulice a č. p.", t.street, "wide") }}
+    {{ inp("zip", "PSČ", t.zip) }}
+    {{ inp("city", "Obec", t.city) }}
+    {{ inp("country", "Stát", t.country) }}
+    {{ inp("phone", "Telefon", t.phone) }}
+    {{ inp("email", "E-mail", t.email) }}
+    {{ inp("web", "Web", t.web) }}
+  </div>
+  <h2 style="margin-top:16px">Podpis prohlášení a číslování</h2>
+  <div class="grid">
+    {{ inp("signer_name", "Podepisující osoba", t.signer_name) }}
+    {{ inp("signer_position", "Funkce", t.signer_position) }}
+    {{ inp("issue_place", "Místo vydání", t.issue_place) }}
+    {{ inp("serial_prefix", "Prefix výr. čísla", t.serial_prefix) }}
+    {{ inp("next_serial", "Další pořadové číslo", t.next_serial, type="number") }}
+  </div>
+  <p class="muted small">Výrobní číslo = prefix + rok + pořadí, např. {{ t.serial_prefix }}2026-{{ "%04d"|format(t.next_serial) }}.</p>
+
+  <h2 style="margin-top:16px">Normy v prohlášení o shodě</h2>
+  <p class="muted small">Ověřte aktuální edice proti seznamu harmonizovaných norem (Úřední věstník EU) a ČSN online. Změna platí pro nově vydané revize, archiv se nemění.</p>
+  <table class="list small">
+    <tr><th>Výchozí</th><th>Použít jako</th><th>Název</th></tr>
+    {% for s in standards %}
+    <tr><td>{{ s.code }}</td>
+      <td><input name="std_{{ loop.index0 }}" value="{{ t.standards_override.get(s.code, s.code) }}"{% if not user.is_admin %} disabled{% endif %}></td>
+      <td class="muted">{{ s.title }}</td></tr>
+    {% endfor %}
+  </table>
+  {% if user.is_admin %}<p><button class="primary">Uložit nastavení</button></p>{% endif %}
+</form>
+
+<div class="card">
+  <h2>Logo</h2>
+  <div class="row">
+    {% if t.logo_key %}<img src="/settings/logo" alt="logo" style="max-height:60px;max-width:220px;border:1px solid var(--line);padding:4px;background:#fff">{% else %}<span class="muted">Bez loga</span>{% endif %}
+    {% if user.is_admin %}
+    <form method="post" action="/settings/logo" enctype="multipart/form-data" class="row">
+      <input type="file" name="file" accept="image/png,image/jpeg,image/svg+xml" required style="max-width:300px"><button>Nahrát</button>
+    </form>{% endif %}
+  </div>
+</div>
+
+<div class="card" id="uzivatele">
+  <h2>Uživatelé</h2>
+  <table class="list small">
+    <tr><th>Jméno</th><th>E-mail</th><th>Role</th><th>Stav</th><th></th></tr>
+    {% for u in users %}
+    <tr><td>{{ u.name }}</td><td>{{ u.email }}</td><td>{{ u.role }}</td><td>{{ "aktivní" if u.active else "zablokován" }}</td>
+      <td>{% if user.is_admin and u.id != user.id and u.role != "owner" %}<form method="post" action="/settings/users/{{ u.id }}/toggle"><button class="link">{{ "zablokovat" if u.active else "odblokovat" }}</button></form>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% if user.is_admin %}
+  <form method="post" action="/settings/users" class="grid" style="margin-top:12px">
+    <label>Jméno<input name="name" required></label>
+    <label>E-mail<input type="email" name="email" required></label>
+    <label>Heslo<input type="password" name="password" minlength="8" required></label>
+    <label>Role<select name="role"><option value="technik">technik</option><option value="admin">správce</option></select></label>
+    <label>&nbsp;<button class="primary">Přidat uživatele</button></label>
+  </form>
+  {% endif %}
+</div>
+
+<form class="card row" method="post" action="/settings/password">
+  <h2 style="margin:0">Moje heslo</h2>
+  <input type="password" name="password" minlength="8" required placeholder="Nové heslo" style="max-width:260px" autocomplete="new-password">
+  <button>Změnit</button>
+</form>
+{% endblock %}

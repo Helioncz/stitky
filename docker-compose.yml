@@ -1,0 +1,25 @@
+# Štítky na Hetzner VPS (vedle NapojSiSám). Env proměnné z host souboru .env.
+# Data (fotky, vydaná PDF, SQLite) jsou ve volume stitky-data – ZÁLOHOVAT.
+# HTTPS řeší Caddy (viz deploy/Caddyfile.snippet), aplikace poslouchá jen na localhostu.
+services:
+  stitky:
+    build: .
+    container_name: stitky
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+      HTTPS_ONLY_COOKIES: "true"
+    volumes:
+      - stitky-data:/data
+    ports:
+      - "127.0.0.1:8010:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+volumes:
+  stitky-data:

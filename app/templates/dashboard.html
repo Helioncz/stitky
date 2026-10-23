@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Rozvaděče{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>Rozvaděče</h1>
+  <span class="spacer"></span>
+  <form method="get" action="/" class="row" style="gap:6px">
+    <input name="q" value="{{ q }}" placeholder="Hledat: výr. číslo, zákazník, akce…" style="width:280px">
+    <button>Hledat</button>
+  </form>
+  <form method="post" action="/sb/new"><button class="primary">+ Nový rozvaděč</button></form>
+</div>
+{% if not user.tenant.signer_name or not user.tenant.street %}
+<div class="flash error">Doplňte údaje výrobce a podepisující osobu v <a href="/settings">Nastavení</a> – jsou na všech dokumentech.</div>
+{% endif %}
+<div class="card scroll" style="padding:0">
+<table class="list">
+  <tr><th>Výr. číslo</th><th>Označení</th><th>Akce / zákazník</th><th>Přístrojů</th><th>Stav</th><th>Upraveno</th></tr>
+  {% for sb in items %}
+  <tr>
+    <td><a href="/sb/{{ sb.id }}"><b>{{ sb.serial_number }}</b></a></td>
+    <td>{{ sb.designation }} <span class="muted small">{{ sb.name }}</span></td>
+    <td>{{ sb.site or "–" }}<br><span class="muted small">{{ sb.customer.name if sb.customer else "" }}</span></td>
+    <td>{{ sb.devices|length }}</td>
+    <td>{% if sb.latest_revision %}<span class="badge ok">vydáno rev. {{ "%02d"|format(sb.latest_revision.number) }}</span>{% else %}<span class="badge">koncept</span>{% endif %}</td>
+    <td class="small muted">{{ sb.updated_at|czdate }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">Zatím žádné rozvaděče. Začněte tlačítkem „Nový rozvaděč“.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+# Přidat do Caddyfile na serveru (doménu upravit, A záznam musí mířit na IP VPS).
+# Caddy si sám vyřídí HTTPS certifikát.
+dokumentace.helion.cz {
+	request_body max_size 40MB
+	reverse_proxy 127.0.0.1:8010
+}

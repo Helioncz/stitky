@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Registrace firmy{% endblock %}
+{% block content %}
+<div class="auth">
+  <h1>Registrace firmy</h1>
+  <form class="card" method="post" action="/signup">
+    <label>Název firmy (výrobce rozvaděčů)<input name="company" required></label>
+    <label>IČO<input name="ico" inputmode="numeric"></label>
+    <label>Vaše jméno<input name="name" required></label>
+    <label>E-mail<input type="email" name="email" required autocomplete="username"></label>
+    <label>Heslo (min. 8 znaků)<input type="password" name="password" minlength="8" required autocomplete="new-password"></label>
+    <button class="primary" style="width:100%">Založit</button>
+  </form>
+  <p class="small"><a href="/login">Zpět na přihlášení</a></p>
+</div>
+{% endblock %}

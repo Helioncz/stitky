@@ -1,0 +1,13 @@
+<div class="head">
+  <div class="firm">
+    {% if s.tenant.logo %}<img src="{{ s.tenant.logo }}" alt=""><br>{% endif %}
+    <b>{{ s.tenant.name }}</b><br>
+    {{ s.tenant.address_line }}{% if s.tenant.ico %} · IČO {{ s.tenant.ico }}{% endif %}{% if s.tenant.dic %} · DIČ {{ s.tenant.dic }}{% endif %}<br>
+    {% if s.tenant.phone %}{{ s.tenant.phone }}{% endif %}{% if s.tenant.email %} · {{ s.tenant.email }}{% endif %}{% if s.tenant.web %} · {{ s.tenant.web }}{% endif %}
+  </div>
+  <div class="docid">
+    <b>{{ titles[kind] }}</b><br>
+    Rozvaděč {{ s.sb.designation }} · v. č. {{ s.sb.serial_number }}<br>
+    {% if s.revision is not none %}Revize {{ "%02d"|format(s.revision) }} · {{ s.issued_at|czdate }}{% else %}NÁHLED – nevydáno{% endif %}
+  </div>
+</div>
