@@ -50,11 +50,12 @@ _SB_FIELDS = [
     "ipk_ka", "rdf", "ip_code", "ip_code_open", "ik_code", "location", "installation", "mounting",
     "pollution_degree", "emc_environment", "internal_form", "protection_class", "operated_by",
     "enclosure_manufacturer", "enclosure_type", "width_mm", "height_mm", "depth_mm", "weight_kg",
-    "supply_cable", "notes",
+    "supply_cable", "notes", "dc_un_v", "dc_isc_a", "dc_inputs", "dc_earthing",
 ]
 _DEV_FIELDS = [
     "position", "designation", "feeds_from", "kind", "manufacturer", "type_code", "poles", "rated_current_a",
     "curve", "breaking_capacity_ka", "residual_ma", "rcd_type", "circuit_label", "cable", "phase",
+    "system", "rated_voltage_v", "din_row",
 ]
 _TENANT_FIELDS = [
     "name", "ico", "dic", "street", "city", "zip", "country", "email", "phone", "web",
@@ -83,9 +84,11 @@ def build_snapshot(sb: Switchboard, tenant: Tenant, revision_number: int | None,
         row = {f: getattr(d, f) for f in _DEV_FIELDS}
         row["kind_label"] = d.kind_label
         row["rating_text"] = d.rating_text
+        row["system"] = d.system or "AC"
         devices.append(row)
     sbd = {f: getattr(sb, f) for f in _SB_FIELDS}
     sbd["standard_label"] = sb.standard_label
+    sbd["has_dc"] = sb.has_dc
     sbd["manufacture_date"] = sb.manufacture_date.isoformat() if sb.manufacture_date else None
     sbd["customer"] = ({"name": sb.customer.name, "address": sb.customer.address, "ico": sb.customer.ico}
                        if sb.customer else None)

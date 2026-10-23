@@ -5,7 +5,7 @@ formát (viz PROMPT). Výsledek je vždy jen NÁVRH – technik ho v aplikaci zk
 """
 from app.config import settings
 
-from .prompt import PROMPT, normalize_devices, normalize_enclosure, normalize_nameplate
+from .prompt import PROMPT, normalize_devices, normalize_enclosure, normalize_nameplate, normalize_rows
 
 
 def recognize(images: list[tuple[bytes, str]]) -> tuple[dict, str]:
@@ -15,8 +15,10 @@ def recognize(images: list[tuple[bytes, str]]) -> tuple[dict, str]:
     else:
         from . import gemini as provider
     raw, model = provider.recognize(images, PROMPT)
+    devices = normalize_devices(raw)
     return {
-        "devices": normalize_devices(raw),
+        "devices": devices,
+        "rows": normalize_rows(raw, devices),
         "enclosure": normalize_enclosure(raw),
         "nameplate": normalize_nameplate(raw),
         "notes": str((raw or {}).get("notes") or "").strip()[:1000],

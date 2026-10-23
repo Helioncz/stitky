@@ -6,7 +6,8 @@
 
 <h2>Elektrické charakteristiky</h2>
 <table class="kv">
-  <tr><td>Jmenovité napětí sestavy Un</td><td>{{ s.sb.un_v|num }} V AC</td></tr>
+  <tr><td>Jmenovité napětí sestavy Un{% if s.sb.has_dc %} – AC část{% endif %}</td><td>{{ s.sb.un_v|num }} V AC</td></tr>
+  {% if s.sb.has_dc %}<tr><td>Jmenovité napětí – DC část (FV)</td><td>{{ s.sb.dc_un_v|num }} V DC</td></tr>{% endif %}
   <tr><td>Jmenovité pracovní napětí obvodu Ue</td><td>{{ s.sb.ue_v|num }} V AC</td></tr>
   <tr><td>Jmenovité izolační napětí Ui</td><td>{{ s.sb.ui_v|num }} V</td></tr>
   <tr><td>Jmenovité impulzní výdržné napětí Uimp</td><td>{{ s.sb.uimp_kv|num }} kV</td></tr>
@@ -20,6 +21,17 @@
   <tr><td>Přívodní vedení</td><td>{{ s.sb.supply_cable or "–" }}</td></tr>
   <tr><td>Hlavní přístroj</td><td>{{ s.sb.main_device or "–" }}</td></tr>
 </table>
+
+{% if s.sb.has_dc %}
+<h2>DC část – fotovoltaické pole</h2>
+<table class="kv">
+  <tr><td>Max. napětí FV pole Uoc max (DC)</td><td>{{ s.sb.dc_un_v|num }} V DC</td></tr>
+  <tr><td>Max. zkratový proud FV vstupu Isc PV</td><td>{{ s.sb.dc_isc_a|num }} A</td></tr>
+  <tr><td>Počet DC vstupů (stringů)</td><td>{{ s.sb.dc_inputs|num }}</td></tr>
+  <tr><td>Uzemnění DC strany</td><td>{{ s.sb.dc_earthing or "–" }}</td></tr>
+</table>
+<p class="muted small">DC obvody jsou galvanicky oddělené od AC části rozvaděče; FV pole je zdrojem napětí vždy, když je osvětleno.</p>
+{% endif %}
 
 <h2>Konstrukce a prostředí</h2>
 <table class="kv">
@@ -38,9 +50,9 @@
 
 <h2>Vývody a osazené přístroje</h2>
 <table class="grid small">
-  <tr><th>Ozn.</th><th>Napájeno z</th><th>Přístroj</th><th>Výrobce / typ</th><th>Parametry (Inc)</th><th>Vývod</th><th>Kabel</th><th>Fáze</th></tr>
+  <tr><th>Ozn.</th>{% if s.sb.has_dc %}<th>Soustava</th>{% endif %}<th>Napájeno z</th><th>Přístroj</th><th>Výrobce / typ</th><th>Parametry (Inc)</th><th>Vývod</th><th>Kabel</th><th>Fáze</th></tr>
   {% for d in s.devices %}
-  <tr><td>{{ d.designation }}</td><td>{{ d.feeds_from }}</td><td>{{ d.kind_label }}</td><td>{{ d.manufacturer }} {{ d.type_code }}</td>
+  <tr><td>{{ d.designation }}</td>{% if s.sb.has_dc %}<td>{{ d.system or "AC" }}</td>{% endif %}<td>{{ d.feeds_from }}</td><td>{{ d.kind_label }}</td><td>{{ d.manufacturer }} {{ d.type_code }}</td>
       <td>{{ d.rating_text }}</td><td>{{ d.circuit_label }}</td><td>{{ d.cable }}</td><td>{{ d.phase }}</td></tr>
   {% endfor %}
 </table>

@@ -14,7 +14,8 @@
   {% if s.sb.site %}<tr><td>Místo instalace</td><td>{{ s.sb.site }}</td></tr>{% endif %}
   {% if s.sb.customer %}<tr><td>Odběratel</td><td>{{ s.sb.customer.name }}{% if s.sb.customer.address %}, {{ s.sb.customer.address }}{% endif %}</td></tr>{% endif %}
   <tr><td>Základní parametry</td><td>Un {{ s.sb.un_v|num }} V, {{ s.sb.fn_hz|num }} Hz, {{ s.sb.phases }}, InA {{ s.sb.ina_a|num }} A,
-      Icc {{ s.sb.icc_ka|num }} kA, {{ s.sb.ip_code }}, síť {{ s.sb.earthing_system }}</td></tr>
+      Icc {{ s.sb.icc_ka|num }} kA, {{ s.sb.ip_code }}, síť {{ s.sb.earthing_system }}{% if s.sb.has_dc %};
+      DC část (FV pole) max. {{ s.sb.dc_un_v|num }} V DC, Isc {{ s.sb.dc_isc_a|num }} A, {{ s.sb.dc_inputs|num }} vstupů{% endif %}</td></tr>
 </table>
 
 <h2>2. Výrobce</h2>

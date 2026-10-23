@@ -127,6 +127,41 @@ def test_proposal_designations_and_feeds(db):
     assert got == [("-Q1", ""), ("-F1", "-Q1"), ("-F2", "-F1"), ("-F3", "-Q1"), ("-FA1", "-Q1")]
 
 
+def test_pv_switchboard_dc_row_is_separate(db):
+    """FVE rozvaděč: lišta 1 = DC (svodiče PV, svorky), lišta 2 = AC. DC se nesmí napájet z AC."""
+    from app.domain import characteristics
+    from app.services import documents
+    t, _ = make_tenant(db, email="pv@test.cz")
+    sb = make_switchboard(db, t, serial="PV-1")
+    proposed = [
+        {"row": 1, "kind": "TERMINAL"},
+        {"row": 1, "kind": "SPD", "manufacturer": "Mersen", "type_code": "SP12-SK1000V-PV", "rated_voltage_v": 1000},
+        {"row": 1, "kind": "SPD", "manufacturer": "Mersen", "type_code": "SP12-SK1000V-PV", "system": "AC"},
+        {"row": 2, "kind": "MCB", "rated_current_a": 16, "poles": "3", "breaking_capacity_ka": 6},
+        {"row": 2, "kind": "SPD", "type_code": "FLP-12,5 V"},
+        {"row": 2, "kind": "MCB", "rated_current_a": 6, "breaking_capacity_ka": 6},
+    ]
+    proposal.apply(db, sb, proposed, replace=True, row_systems={"1": "DC", "2": "AC"})
+    db.commit()
+    sb = db.get(Switchboard, sb.id)
+    dc = [d for d in sb.devices if d.is_dc]
+    ac = [d for d in sb.devices if not d.is_dc]
+    assert len(dc) == 3 and all(d.feeds_from == "" for d in dc)  # technikova volba lišty má přednost před AI
+    main = characteristics.find_main_device(list(sb.devices))
+    assert main in ac and main.rated_current_a == 16
+    assert all(d.feeds_from == main.designation for d in ac if d is not main)
+
+    sb.dc_un_v, sb.ui_v, sb.standard_part = 1000, 500, "3"
+    warnings = " ".join(characteristics.analyze(sb).warnings)
+    assert "Ui sestavy (500 V)" in warnings and "DBO" in warnings and "Isc" in warnings
+    assert "chybí jmenovité DC napětí" in warnings  # druhý svodič bez napětí
+
+    snap = documents.build_snapshot(sb, t, None)
+    assert "DC – FV pole, max. 1000 V DC" in snap["schematic_svg"]
+    assert "pod napětím i po vypnutí AC" in documents.render_html("manual", snap)
+    assert "1000 V DC" in documents.render_html("interface", snap)
+
+
 def test_proposal_uses_photo_labels_and_main_on_bottom_row(db):
     """Rozvaděč FVE (Strunk): označení ze štítkového pruhu, hlavní vypínač až na 3. liště."""
     t, _ = make_tenant(db, email="strunk@test.cz")

@@ -9,6 +9,14 @@ function addDeviceRow() {
   row.querySelector("input").focus();
 }
 
+// Soustava (AC/DC) pro všechny přístroje na dané DIN liště – pak „Uložit přístroje“
+function setRowSystem(row, sys) {
+  document.querySelectorAll("#devtable tbody tr").forEach((tr) => {
+    const r = tr.querySelector(".dinrow");
+    if (r && String(r.value) === String(row)) tr.querySelector(".sys").value = sys;
+  });
+}
+
 function moveRow(btn, dir) {
   const tr = btn.closest("tr");
   const sib = dir < 0 ? tr.previousElementSibling : tr.nextElementSibling;

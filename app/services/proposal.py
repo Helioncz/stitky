@@ -19,17 +19,22 @@ _DEVICE_FIELDS = ("kind", "manufacturer", "type_code", "poles", "rated_current_a
                   "residual_ma", "rcd_type", "circuit_label")
 
 
-def _pick_main(items: list[dict]) -> int | None:
+def _pick_main(items: list[dict], systems: list[str]) -> int | None:
+    """Hlavní přístroj jen z AC části – DC strana (FV pole) má vlastní vstupy a nenapájí se z AC."""
     for pred in (lambda d: d.get("is_main"),
                  lambda d: d["kind"] in ("SWITCH", "MCCB"),
                  lambda d: d["kind"] in ("MCB", "FUSE")):
-        idx = next((i for i, d in enumerate(items) if pred(d)), None)
+        idx = next((i for i, d in enumerate(items) if systems[i] == "AC" and pred(d)), None)
         if idx is not None:
             return idx
     return None
 
 
-def apply(db: Session, sb: Switchboard, proposed: list[dict], replace: bool) -> int:
+def apply(db: Session, sb: Switchboard, proposed: list[dict], replace: bool,
+          row_systems: dict[str, str] | None = None) -> int:
+    """row_systems = {"1": "DC", "2": "AC"} – soustava potvrzená technikem po lištách; má přednost před AI."""
+    row_systems = row_systems or {}
+    systems = [row_systems.get(str(p.get("row"))) or p.get("system") or "AC" for p in proposed]
     if replace:
         sb.devices.clear()
         db.flush()
@@ -47,14 +52,16 @@ def apply(db: Session, sb: Switchboard, proposed: list[dict], replace: bool) -> 
                 used.add(des)
                 return des
 
-    main_existing = next((d for d in existing if not d.feeds_from), None)
-    main_idx = None if main_existing else _pick_main(proposed)
+    main_existing = next((d for d in existing if not d.feeds_from and not d.is_dc), None)
+    main_idx = None if main_existing else _pick_main(proposed, systems)
     pos = max((d.position for d in existing), default=-1) + 1
     taken: set[str] = {d.designation for d in existing if d.designation}
 
     devices: list[Device] = []
-    for item in proposed:
-        dev = Device(position=pos, source="ai", ai_confidence=item.get("confidence"))
+    for item, system in zip(proposed, systems):
+        dev = Device(position=pos, source="ai", ai_confidence=item.get("confidence"), system=system,
+                     din_row=item.get("row") if isinstance(item.get("row"), int) else None,
+                     rated_voltage_v=item.get("rated_voltage_v"))
         pos += 1
         for f in _DEVICE_FIELDS:
             if item.get(f) not in (None, ""):
@@ -78,8 +85,8 @@ def apply(db: Session, sb: Switchboard, proposed: list[dict], replace: bool) -> 
     for item, dev in zip(proposed, devices):
         if item.get("row") != current_row:
             current_rcd, current_row = "", item.get("row")
-        if dev.designation == main_des:
-            dev.feeds_from = ""
+        if dev.designation == main_des or dev.is_dc:
+            dev.feeds_from = ""  # DC přístroje jsou samostatné vstupy z FV pole – propojení doplní technik
         elif dev.kind == "RCD":
             dev.feeds_from = main_des
             current_rcd = dev.designation

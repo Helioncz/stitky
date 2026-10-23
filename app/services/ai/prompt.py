@@ -14,6 +14,8 @@ Vrať POUZE JSON:
    "designation": "označení přístroje přesně podle štítku/popisku na fotce (F2, -Q1, KM1…), jinak \\"\\"",
    "is_main": false,
    "kind": "MCB|RCD|RCBO|MCCB|SWITCH|FUSE|SPD|CONTACTOR|RELAY|METER|TERMINAL|OTHER",
+   "system": "AC|DC – DC jen je-li to z přístroje zřejmé (PV, ⎓, „1000V DC“, gPV pojistky, DC odpínač); jinak AC",
+   "rated_voltage_v": "jmenovité napětí z přístroje jako číslo (např. 1000 u „Ucpv 1000V DC“, 230/400 u AC), jinak null",
    "manufacturer": "Eaton|ABB|Schneider Electric|OEZ|Hager|Siemens|Legrand|ELKO EP|…",
    "type_code": "typové označení PŘEČTENÉ z přístroje, např. PL6-C16/1, iC60N, HRN-54",
    "poles": "1|1+N|2|3|3+N|4",
@@ -28,6 +30,7 @@ Vrať POUZE JSON:
                "mounting": "nástěnná|zapuštěná|stojanová", "ip_code": "IP65 jen je-li na skříni uvedeno",
                "width_mm": null, "height_mm": null, "depth_mm": null},
  "nameplate": {"present": false, "manufacturer": "", "serial_number": "", "text": "přepis výrobního štítku rozvaděče"},
+ "rows": [{"row": 1, "system": "AC|DC", "reason": "proč (např. svodiče PV 1000 V DC)"}],
  "notes": "celkové poznámky česky (nečitelné přístroje, zakryté části, prázdné pozice)"}
 
 Pravidla:
@@ -42,7 +45,14 @@ Pravidla:
 - Samolepky a nápisy, které nepatří ke konkrétnímu přístroji (např. „HLAVNÍ VYPÍNAČ ZÁLOHY“ pod lištou),
   zmiň v note příslušného přístroje, nevkládej je do circuit_label jiných přístrojů.
 - Svorky a propojovací lišty vypisuj jen jako samostatné svorkovnice (TERMINAL) bez parametrů.
+- FUSE (pojistkový odpojovač) jen tehdy, je-li vidět výklopný držák/rukojeť s pojistkovou vložkou
+  nebo nápis na přístroji (např. „gPV“, velikost 10x38). Bílé/šedé bloky se šrouby nahoře a dole
+  bez držáku jsou svorky (TERMINAL). Výrobce a typ svorek NEuváděj, nejsou-li na nich čitelně napsané.
+- Typové označení NIKDY neodvozuj od výrobce sousedního přístroje.
 - Rozměry skříně odhadni z počtu modulů a řad (1 modul = 18 mm), jen pokud si nejsi jistý typem.
+- Rozvaděče FVE mívají jednu lištu pro DC (FV pole, až 1000 V DC) a jinou pro AC. Do "rows" uveď
+  odhad soustavy pro každou lištu; svorky a jističe na liště s DC svodiči/pojistkami/odpínači patří k DC.
+- DC přístroje NIKDY nenapájej z AC přístrojů – DC strana je samostatný obvod ze střechy.
 """
 
 _KIND_ALIASES = {"RCCB": "RCD", "FI": "RCD", "ISOLATOR": "SWITCH", "DISCONNECTOR": "SWITCH", "SVODIC": "SPD"}
@@ -85,6 +95,8 @@ def normalize_devices(raw: dict) -> list[dict]:
             "designation": normalize_designation(d.get("designation")),
             "is_main": bool(d.get("is_main")),
             "kind": kind,
+            "system": "DC" if _str(d.get("system")).upper() == "DC" else "AC",
+            "rated_voltage_v": _float(d.get("rated_voltage_v")),
             "manufacturer": _str(d.get("manufacturer"), 100),
             "type_code": _str(d.get("type_code"), 100),
             "poles": _str(d.get("poles") or "1", 10),
@@ -117,6 +129,20 @@ def normalize_enclosure(raw: dict) -> dict:
         "height_mm": _float(e.get("height_mm")),
         "depth_mm": _float(e.get("depth_mm")),
     }
+
+
+def normalize_rows(raw: dict, devices: list[dict]) -> dict[str, str]:
+    """Soustava po lištách {"1": "DC", "2": "AC"}: z odhadu AI, jinak podle většiny přístrojů na liště."""
+    out: dict[str, str] = {}
+    for r in (raw or {}).get("rows") or []:
+        if r.get("row") is not None:
+            out[str(r["row"])] = "DC" if _str(r.get("system")).upper() == "DC" else "AC"
+    for d in devices:
+        key = str(d.get("row"))
+        if d.get("row") is not None and key not in out:
+            same = [x for x in devices if str(x.get("row")) == key]
+            out[key] = "DC" if sum(x["system"] == "DC" for x in same) * 2 > len(same) else "AC"
+    return dict(sorted(out.items(), key=lambda kv: (len(kv[0]), kv[0])))
 
 
 def normalize_nameplate(raw: dict) -> dict:

@@ -73,7 +73,7 @@
     <tr><th>#</th><th>Lišta</th><th>Ozn.</th><th>Druh</th><th>Výrobce</th><th>Typ</th><th>Póly</th><th>In</th><th>Char.</th><th>Icn kA</th><th>IΔn</th><th>Vývod</th><th>Jistota</th><th>Poznámka</th></tr>
     {% for d in prop.devices %}
     <tr class="{{ 'lowconf' if (d.confidence or 0) < 0.7 }}">
-      <td>{{ loop.index }}</td><td>{{ d.row or "" }}</td><td>{{ d.designation }}{% if d.is_main %} <span class="badge ok">hlavní</span>{% endif %}</td><td>{{ DEVICE_KINDS.get(d.kind, d.kind) }}</td><td>{{ d.manufacturer }}</td>
+      <td>{{ loop.index }}</td><td>{{ d.row or "" }}</td><td>{{ d.designation }}{% if d.is_main %} <span class="badge ok">hlavní</span>{% endif %}</td><td>{{ DEVICE_KINDS.get(d.kind, d.kind) }}{% if d.rated_voltage_v %} <span class="muted">{{ d.rated_voltage_v|num }} V</span>{% endif %}</td><td>{{ d.manufacturer }}</td>
       <td>{{ d.type_code }}{% if d.catalog %} <span class="badge ok">katalog</span>{% endif %}</td><td>{{ d.poles }}</td>
       <td>{{ d.rated_current_a|num }}</td><td>{{ d.curve }}</td><td>{{ d.breaking_capacity_ka|num }}</td>
       <td>{{ d.residual_ma|num if d.residual_ma else "" }} {{ d.rcd_type }}</td><td>{{ d.circuit_label }}</td>
@@ -81,10 +81,23 @@
     </tr>
     {% endfor %}
   </table></div>
-  <form method="post" action="/sb/{{ sb.id }}/proposal" class="row" style="margin-top:10px">
+  {% set rows = prop.rows or {} %}
+  {% if not rows %}{% for d in prop.devices if d.row is not none %}{% set _ = rows.update({d.row|string: d.system or "AC"}) %}{% endfor %}{% endif %}
+  <form method="post" action="/sb/{{ sb.id }}/proposal" style="margin-top:10px">
+    {% if rows %}
+    <p class="small" style="margin:0 0 6px">Soustava po lištách <span class="muted">(AI odhad – zkontrolujte; u FVE bývá jedna lišta DC z panelů, jiná AC)</span>:</p>
+    <div class="row small" style="margin-bottom:8px">
+      {% for r, sys in rows.items() %}
+      <label style="display:flex;gap:6px;align-items:center;color:var(--ink)">Lišta {{ r }}
+        <select name="sys_row_{{ r }}" style="width:auto"><option value="AC"{% if sys != "DC" %} selected{% endif %}>AC</option><option value="DC"{% if sys == "DC" %} selected{% endif %}>DC (FV)</option></select></label>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="row">
     <button class="primary" name="mode" value="replace" {% if sb.devices %}onclick="return confirm('Nahradit současných {{ sb.devices|length }} přístrojů návrhem AI?')"{% endif %}>Převzít do přístrojů (nahradit)</button>
     {% if sb.devices %}<button name="mode" value="append">Přidat k současným</button>{% endif %}
     <span class="muted small">Žlutě = nízká jistota, zkontrolujte. U přístrojů z katalogu se použijí ověřené parametry.</span>
+    </div>
   </form>
   {% endif %}
 </section>
@@ -96,15 +109,20 @@
     Typ přístroje se našeptává z katalogu – vybráním se doplní parametry.</p>
   <form method="post" action="/sb/{{ sb.id }}/devices" id="devform">
   <div class="scroll"><table class="devices" id="devtable">
-    <thead><tr><th>Ozn.</th><th>Napájeno z</th><th>Druh</th><th>Výrobce</th><th>Typ</th><th>Póly</th><th>In [A]</th><th>Char.</th><th>Icn [kA]</th><th>IΔn [mA]</th><th>Typ RCD</th><th>Vývod (popis)</th><th>Kabel</th><th>Fáze</th><th></th></tr></thead>
+    <thead><tr><th>Ozn.</th><th>Soustava</th><th>Napájeno z</th><th>Druh</th><th>Výrobce</th><th>Typ</th><th>Póly</th><th>In [A]</th><th>Char.</th><th>Icn [kA]</th><th>IΔn [mA]</th><th>Typ RCD</th><th>U [V]</th><th>Vývod (popis)</th><th>Kabel</th><th>Fáze</th><th></th></tr></thead>
     <tbody>
     {% for d in sb.devices %}{% include "_device_row.html" %}{% endfor %}
     </tbody>
   </table></div>
   <template id="devrow">{% with d=None %}{% include "_device_row.html" %}{% endwith %}</template>
   <datalist id="catlist"></datalist>
+  {% set din_rows = sb.devices|map(attribute="din_row")|select|unique|sort|list %}
   <div class="row" style="margin-top:10px">
     <button type="button" onclick="addDeviceRow()">+ Přidat přístroj</button>
+    {% for r in din_rows %}
+    <span class="small">Lišta {{ r }}:
+      <button type="button" onclick="setRowSystem({{ r }}, 'AC')">AC</button><button type="button" onclick="setRowSystem({{ r }}, 'DC')">DC</button></span>
+    {% endfor %}
     <span class="spacer"></span>
     <button class="primary">Uložit přístroje</button>
   </div>
@@ -154,6 +172,15 @@
       {{ inp("rdf", "RDF – součinitel soudobosti", sb.rdf, "number", step="any") }}
       {{ inp("supply_cable", "Přívodní kabel", sb.supply_cable) }}
     </div></fieldset>
+
+    <fieldset><legend>DC část – fotovoltaické pole {% if not sb.has_dc %}<span class="muted small">(jen má-li rozvaděč DC přístroje)</span>{% endif %}</legend><div class="grid">
+      {{ inp("dc_un_v", "Uoc max FV pole [V DC]", sb.dc_un_v, "number", step="any") }}
+      {{ inp("dc_isc_a", "Isc max vstupu [A]", sb.dc_isc_a, "number", step="any") }}
+      {{ inp("dc_inputs", "Počet DC vstupů (stringů)", sb.dc_inputs, "number") }}
+      {{ sel("dc_earthing", "Uzemnění DC strany", sb.dc_earthing or "", [("", "–"), ("izolovaná (IT)", "izolovaná (IT)"), ("uzemněný záporný pól", "uzemněný záporný pól"), ("uzemněný kladný pól", "uzemněný kladný pól")]) }}
+    </div>
+    <p class="muted small" style="margin:6px 0 0">Uoc max = napětí naprázdno stringu při nejnižší teplotě (z návrhu FVE). Ui rozvaděče musí být ≥ Uoc max.</p>
+    </fieldset>
 
     <fieldset><legend>Konstrukce a prostředí</legend><div class="grid">
       {{ inp("enclosure_manufacturer", "Skříň – výrobce", sb.enclosure_manufacturer) }}

@@ -2,9 +2,9 @@
   <div class="firm"><b>{{ s.tenant.name }}</b> · {{ s.tenant.address_line }}</div>
   <table>
     <tr><td class="k">Rozvaděč</td><td class="v">{{ s.sb.designation }}{% if s.sb.type_designation %} · {{ s.sb.type_designation }}{% endif %}</td></tr>
-    <tr><td class="k">Výr. číslo</td><td class="v">{{ s.sb.serial_number }}</td></tr>
-    <tr><td class="k">Datum výroby</td><td class="v">{{ s.sb.manufacture_date|czdate }}</td></tr>
+    <tr><td class="k">Výr. č. / datum</td><td class="v">{{ s.sb.serial_number }} · {{ s.sb.manufacture_date|czdate }}</td></tr>
     <tr><td class="k">Un / fn</td><td class="v">{{ s.sb.un_v|num }} V {{ s.sb.fn_hz|num }} Hz · {{ s.sb.phases }} · {{ s.sb.earthing_system }}</td></tr>
+    {% if s.sb.has_dc %}<tr><td class="k">DC (FV)</td><td class="v">max. {{ s.sb.dc_un_v|num }} V DC · Isc {{ s.sb.dc_isc_a|num }} A</td></tr>{% endif %}
     <tr><td class="k">InA / Icc</td><td class="v">{{ s.sb.ina_a|num }} A / {{ s.sb.icc_ka|num }} kA</td></tr>
     <tr><td class="k">Krytí</td><td class="v">{{ s.sb.ip_code }} / {{ s.sb.ik_code }}{% if s.sb.weight_kg %} · {{ s.sb.weight_kg|num }} kg{% endif %}</td></tr>
   </table>

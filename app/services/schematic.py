@@ -55,21 +55,33 @@ def _symbol(kind: str, cx: float, y: float) -> str:
     return box(escape(kind[:4]))
 
 
-def build_tree(devices: list, main) -> tuple[object | None, dict[int, list]]:
+def _dc(d) -> bool:
+    return (getattr(d, "system", None) or "AC") == "DC"
+
+
+def build_tree(devices: list, main) -> tuple[object | None, dict[int, list], list]:
+    """Vrací (AC kořen, děti podle id(rodiče), DC kořeny). DC přístroje nikdy nevisí na AC."""
     by_desig = {d.designation: d for d in devices if d.designation}
     children: dict[int, list] = {}
+    dc_roots: list = []
     for d in devices:
         if d is main:
             continue
         parent = by_desig.get(d.feeds_from) if d.feeds_from else None
-        if parent is None or parent is d:
+        if parent is d or (parent is not None and _dc(parent) != _dc(d)):
+            parent = None
+        if parent is None:
+            if _dc(d):
+                dc_roots.append(d)
+                continue
             parent = main
         if parent is None:
             continue
         children.setdefault(id(parent), []).append(d)
     for lst in children.values():
         lst.sort(key=lambda x: x.position)
-    return main, children
+    dc_roots.sort(key=lambda x: x.position)
+    return main, children, dc_roots
 
 
 def _width(node, children) -> float:
@@ -120,21 +132,42 @@ def _render(node, children, x0: float, y: float, out: list[str]) -> float:
 
 def render_svg(sb, main) -> str:
     devices = list(sb.devices)
-    if not devices or main is None:
+    root, children, dc_roots = build_tree(devices, main)
+    if root is None and not dc_roots:
         return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 60">'
                 '<text x="10" y="30" font-size="12">Schéma nelze sestavit – chybí hlavní přístroj.</text></svg>')
-    root, children = build_tree(devices, main)
-    width = _width(root, children) + 40
-    depth = _depth(root, children)
     top = 46
-    height = top + depth * (10 + SYMBOL_H + LABEL_H) + LEAF_TEXT_H
     out: list[str] = []
-    supply = " · ".join(p for p in (sb.supply_cable, sb.phases, sb.earthing_system,
-                                    f"{sb.un_v:g} V" if sb.un_v else "", f"{sb.fn_hz:g} Hz" if sb.fn_hz else "") if p)
-    out.append(f'<text x="{20 + _width(root, children) / 2}" y="16" font-size="8" text-anchor="middle">'
-               f'Přívod: {escape(supply)}</text>')
-    out.append(f'<line x1="{20 + _width(root, children) / 2}" y1="22" x2="{20 + _width(root, children) / 2}" '
-               f'y2="{top}" {STROKE}/>')
-    _render(root, children, 20, top, out)
+    x = 20.0
+    depth = 0
+    if root is not None:
+        w = _width(root, children)
+        depth = _depth(root, children)
+        supply = " · ".join(p for p in (sb.supply_cable, sb.phases, sb.earthing_system,
+                                        f"{sb.un_v:g} V AC" if sb.un_v else "",
+                                        f"{sb.fn_hz:g} Hz" if sb.fn_hz else "") if p)
+        out.append(f'<text x="{x + w / 2}" y="16" font-size="8" text-anchor="middle">Přívod AC: {escape(supply)}</text>')
+        out.append(f'<line x1="{x + w / 2}" y1="22" x2="{x + w / 2}" y2="{top}" {STROKE}/>')
+        _render(root, children, x, top, out)
+        x += w
+    if dc_roots:
+        if root is not None:
+            x += 30
+            out.append(f'<line x1="{x - 15}" y1="8" x2="{x - 15}" y2="{top + 4 * (10 + SYMBOL_H + LABEL_H)}" '
+                       f'stroke="#888" stroke-width="0.8" stroke-dasharray="4 3"/>')
+        dc_w = sum(_width(r, children) for r in dc_roots)
+        head = "DC – FV pole" + (f", max. {sb.dc_un_v:g} V DC" if sb.dc_un_v else "") + (
+            f", Isc {sb.dc_isc_a:g} A" if sb.dc_isc_a else "") + (f", {sb.dc_earthing}" if sb.dc_earthing else "")
+        out.append(f'<text x="{x + dc_w / 2}" y="16" font-size="8" font-weight="bold" text-anchor="middle">'
+                   f'{escape(head)}</text>')
+        for r in dc_roots:
+            rw = _width(r, children)
+            out.append(f'<text x="{x + rw / 2}" y="34" font-size="6.5" text-anchor="middle">⎓ vstup</text>')
+            out.append(f'<line x1="{x + rw / 2}" y1="37" x2="{x + rw / 2}" y2="{top}" {STROKE}/>')
+            _render(r, children, x, top, out)
+            depth = max(depth, _depth(r, children))
+            x += rw
+    width = x + 20
+    height = top + max(depth, 1) * (10 + SYMBOL_H + LABEL_H) + LEAF_TEXT_H
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" '
             f'font-family="Arial, Helvetica, sans-serif">' + "".join(out) + "</svg>")

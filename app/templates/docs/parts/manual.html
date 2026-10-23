@@ -15,12 +15,21 @@
       Neodstraňujte kryty a víka přístrojů.</li>
   <li>Při zásahu ochrany zjistěte a odstraňte příčinu. Opakované vypínání hlásí poruchu – přivolejte elektrikáře.</li>
   <li>Rozvaděč nepoužívejte, je-li poškozený kryt, dveře nebo přístroje, nebo nese-li stopy přehřátí či vlhkosti.</li>
+  {% if s.sb.has_dc %}
+  <li><b>DC část (fotovoltaika, až {{ s.sb.dc_un_v|num }} V DC):</b> FV panely jsou zdrojem napětí vždy, když jsou osvětlené –
+      DC svorky a přístroje zůstávají <b>pod napětím i po vypnutí AC části</b> a odpojení střídače. Před prací na DC
+      straně ji odpojte DC odpínačem (je-li osazen) nebo na straně FV pole a ověřte beznapěťový stav.</li>
+  <li>DC obvody nikdy nerozpojujte pod zatížením (vytahováním konektorů, pojistek) – stejnosměrný oblouk nezhasíná
+      sám a hrozí popálení a požár. Nejdřív vypněte střídač.</li>
+  <li>Rozvaděč musí být označen výstražným štítkem fotovoltaické instalace (ČSN 33 2000-7-712).</li>
+  {% endif %}
 </ul>
 
 <h2>2. Technické údaje</h2>
 <p>Un {{ s.sb.un_v|num }} V, {{ s.sb.fn_hz|num }} Hz, {{ s.sb.phases }}, síť {{ s.sb.earthing_system }}, InA {{ s.sb.ina_a|num }} A,
   Icc {{ s.sb.icc_ka|num }} kA, krytí {{ s.sb.ip_code }} ({{ s.sb.ip_code_open }} s otevřenými dveřmi), {{ s.sb.ik_code }},
   třída ochrany {{ s.sb.protection_class }}, umístění {{ s.sb.location }}, stupeň znečištění {{ s.sb.pollution_degree|num }}.
+  {% if s.sb.has_dc %}DC část: FV pole max. {{ s.sb.dc_un_v|num }} V DC, Isc {{ s.sb.dc_isc_a|num }} A, {{ s.sb.dc_inputs|num }} vstupů.{% endif %}
   Podrobně viz dokument Charakteristiky rozhraní.</p>
 
 <h2>3. Doprava a skladování</h2>

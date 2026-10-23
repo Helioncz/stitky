@@ -145,6 +145,12 @@ class Switchboard(Base):
     supply_cable: Mapped[str] = mapped_column(String(100), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
 
+    # ── DC část (FV pole) – vyplňuje se, má-li rozvaděč přístroje v soustavě DC ──
+    dc_un_v: Mapped[float | None] = mapped_column(Float)          # max. napětí FV pole Uoc max [V DC]
+    dc_isc_a: Mapped[float | None] = mapped_column(Float)         # max. zkratový proud FV vstupu Isc PV [A]
+    dc_inputs: Mapped[int | None] = mapped_column(Integer)        # počet DC vstupů (stringů)
+    dc_earthing: Mapped[str | None] = mapped_column(String(40))   # izolovaná (IT) | uzemněný pól
+
     # Kusová zkouška (čl. 11) – {"items": {kód: {"result": "OK", "value": ""}}, "tested_by", "test_date", "instrument", "insulation_mohm"}
     routine_test: Mapped[dict] = mapped_column(JSON, default=dict)
     # Poslední návrh AI z fotek: {"model", "at", "devices": [...], "notes", "enclosure"} – technik ho převezme do přístrojů
@@ -172,6 +178,10 @@ class Switchboard(Base):
     @property
     def latest_revision(self) -> "Revision | None":
         return self.revisions[-1] if self.revisions else None
+
+    @property
+    def has_dc(self) -> bool:
+        return bool(self.dc_un_v) or any(d.is_dc for d in self.devices)
 
     @property
     def latest_locked(self) -> "Revision | None":
@@ -222,6 +232,9 @@ class Device(Base):
     circuit_label: Mapped[str] = mapped_column(String(200), default="")  # „Zásuvky kuchyň“
     cable: Mapped[str] = mapped_column(String(100), default="")        # CYKY-J 3x2,5
     phase: Mapped[str] = mapped_column(String(10), default="")         # L1 | L2 | L3 | 3F
+    system: Mapped[str | None] = mapped_column(String(5), default="AC")  # AC | DC (FV) – volí se po lištách
+    din_row: Mapped[int | None] = mapped_column(Integer)                 # číslo DIN lišty shora (z fotky)
+    rated_voltage_v: Mapped[float | None] = mapped_column(Float)        # jmenovité napětí přístroje (u DC Ue/Ucpv)
     source: Mapped[str] = mapped_column(String(10), default="manual")  # manual | ai | catalog
     ai_confidence: Mapped[float | None] = mapped_column(Float)
     catalog_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_devices.id", ondelete="SET NULL"))
@@ -233,8 +246,14 @@ class Device(Base):
         return DEVICE_KINDS.get(self.kind, self.kind)
 
     @property
+    def is_dc(self) -> bool:
+        return (self.system or "AC") == "DC"
+
+    @property
     def rating_text(self) -> str:
         parts = []
+        if self.rated_voltage_v:
+            parts.append(f"{_num(self.rated_voltage_v)} V {'DC' if self.is_dc else 'AC'}")
         if self.curve and self.rated_current_a:
             parts.append(f"{self.curve}{_num(self.rated_current_a)}")
         elif self.rated_current_a:

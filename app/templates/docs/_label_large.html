@@ -9,6 +9,7 @@
     <tr><td class="k">Datum výroby</td><td class="v">{{ s.sb.manufacture_date|czdate }}</td></tr>
     <tr><td class="k">Un / fn</td><td class="v">{{ s.sb.un_v|num }} V / {{ s.sb.fn_hz|num }} Hz · {{ s.sb.phases }}</td></tr>
     <tr><td class="k">Síť</td><td class="v">{{ s.sb.earthing_system }}</td></tr>
+    {% if s.sb.has_dc %}<tr><td class="k">DC (FV)</td><td class="v">max. {{ s.sb.dc_un_v|num }} V DC · Isc {{ s.sb.dc_isc_a|num }} A</td></tr>{% endif %}
     <tr><td class="k">InA</td><td class="v">{{ s.sb.ina_a|num }} A</td></tr>
     <tr><td class="k">Icc</td><td class="v">{{ s.sb.icc_ka|num }} kA</td></tr>
     <tr><td class="k">Krytí / IK</td><td class="v">{{ s.sb.ip_code }} / {{ s.sb.ik_code }}</td></tr>

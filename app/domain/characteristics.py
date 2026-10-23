@@ -28,9 +28,13 @@ class Analysis:
     warnings: list[str] = field(default_factory=list)
 
 
+def _is_dc(d) -> bool:
+    return (getattr(d, "system", None) or "AC") == "DC"
+
+
 def find_main_device(devices: list) -> object | None:
-    """Hlavní přístroj = bez nadřazeného, typicky první v pořadí a s největším proudem."""
-    roots = [d for d in devices if not d.feeds_from and d.kind in INCOMING_KINDS]
+    """Hlavní (AC) přístroj = bez nadřazeného, typicky první v pořadí a s největším proudem."""
+    roots = [d for d in devices if not d.feeds_from and d.kind in INCOMING_KINDS and not _is_dc(d)]
     if not roots:
         return None
     roots.sort(key=lambda d: (d.position, -(d.rated_current_a or 0)))
@@ -42,7 +46,7 @@ def outgoing_circuits(devices: list, main) -> list:
     feeders = {d.feeds_from for d in devices if d.feeds_from}
     return [
         d for d in devices
-        if d is not main and d.kind in PROTECTIVE_KINDS and d.designation not in feeders
+        if d is not main and d.kind in PROTECTIVE_KINDS and d.designation not in feeders and not _is_dc(d)
     ]
 
 
@@ -64,7 +68,8 @@ def analyze(sb) -> Analysis:
     if a.main_device and a.main_device.rated_current_a:
         a.suggested_ina = a.main_device.rated_current_a
 
-    capacities = [d.breaking_capacity_ka for d in devices if d.kind in PROTECTIVE_KINDS and d.breaking_capacity_ka]
+    capacities = [d.breaking_capacity_ka for d in devices
+                  if d.kind in PROTECTIVE_KINDS and d.breaking_capacity_ka and not _is_dc(d)]
     if capacities:
         a.suggested_icc = min(capacities)
 
@@ -104,9 +109,11 @@ def check(sb, a: Analysis) -> list[str]:
                  f"({a.suggested_icc:g} kA) – doložte kaskádu/back-up ochranu dle výrobce.")
 
     missing_icn = [d.designation or d.type_code for d in devices
-                   if d.kind in PROTECTIVE_KINDS and not d.breaking_capacity_ka]
+                   if d.kind in PROTECTIVE_KINDS and not d.breaking_capacity_ka and not _is_dc(d)]
     if missing_icn:
         w.append("U jisticích přístrojů chybí vypínací schopnost: " + ", ".join(missing_icn))
+
+    w.extend(check_dc(sb, devices))
 
     if sb.standard_part == "3":
         # Omezení rozsahu ČSN EN 61439-3 (DBO)
@@ -130,6 +137,37 @@ def check(sb, a: Analysis) -> list[str]:
     nok = [code for code, it in items.items() if (it or {}).get("result") == "NOK"]
     if nok:
         w.append("Kusová zkouška nevyhověla v bodech: " + ", ".join(nok) + " – dokumentaci nelze vydat.")
+    return w
+
+
+def check_dc(sb, devices: list) -> list[str]:
+    """Kontroly DC části (FV pole)."""
+    dc = [d for d in devices if _is_dc(d)]
+    if not dc and not sb.dc_un_v:
+        return []
+    w: list[str] = []
+    if not dc:
+        w.append("Je zadáno DC napětí, ale žádný přístroj není v soustavě DC.")
+    if not sb.dc_un_v:
+        w.append("Rozvaděč má DC přístroje – vyplňte max. napětí FV pole Uoc max (DC část v údajích).")
+        return w
+    if not sb.dc_isc_a:
+        w.append("DC část: není vyplněn max. zkratový proud FV vstupu Isc.")
+    low = [f"{d.designation} ({d.rated_voltage_v:g} V)" for d in dc
+           if d.rated_voltage_v and d.rated_voltage_v < sb.dc_un_v and d.kind != "TERMINAL"]
+    if low:
+        w.append(f"DC přístroje mají nižší jmenovité napětí než Uoc max {sb.dc_un_v:g} V DC: " + ", ".join(low))
+    unknown = [d.designation for d in dc if not d.rated_voltage_v and d.kind not in ("TERMINAL", "OTHER")]
+    if unknown:
+        w.append("U DC přístrojů chybí jmenovité DC napětí (ověřte ≥ Uoc max): " + ", ".join(unknown))
+    if sb.ui_v and sb.ui_v < sb.dc_un_v:
+        w.append(f"Ui sestavy ({sb.ui_v:g} V) je nižší než DC napětí {sb.dc_un_v:g} V – Ui musí pokrýt DC část.")
+    if sb.standard_part == "3" and sb.dc_un_v > 300:
+        w.append("DC část nad 300 V nespadá pod DBO (61439-3) – nastavte druh sestavy na výkonový rozvaděč (61439-2).")
+    ac_feeds_dc = [d.designation for d in dc if d.feeds_from and d.feeds_from in
+                   {x.designation for x in devices if not _is_dc(x)}]
+    if ac_feeds_dc:
+        w.append("DC přístroje jsou napájené z AC přístroje: " + ", ".join(ac_feeds_dc))
     return w
 
 

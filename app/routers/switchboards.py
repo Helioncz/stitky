@@ -21,10 +21,11 @@ TEXT_FIELDS = [
     "designation", "type_designation", "name", "site", "order_number", "standard_part", "phases",
     "earthing_system", "ip_code", "ip_code_open", "ik_code", "location", "installation", "mounting",
     "emc_environment", "internal_form", "protection_class", "operated_by", "enclosure_manufacturer",
-    "enclosure_type", "supply_cable", "notes",
+    "enclosure_type", "supply_cable", "notes", "dc_earthing",
 ]
-FLOAT_FIELDS = ["un_v", "ue_v", "ui_v", "uimp_kv", "fn_hz", "ina_a", "icc_ka", "icw_ka", "ipk_ka", "rdf", "weight_kg"]
-INT_FIELDS = ["pollution_degree", "width_mm", "height_mm", "depth_mm"]
+FLOAT_FIELDS = ["un_v", "ue_v", "ui_v", "uimp_kv", "fn_hz", "ina_a", "icc_ka", "icw_ka", "ipk_ka", "rdf", "weight_kg",
+                "dc_un_v", "dc_isc_a"]
+INT_FIELDS = ["pollution_degree", "width_mm", "height_mm", "depth_mm", "dc_inputs"]
 MAX_PHOTO_PX = 2400
 
 
@@ -160,8 +161,8 @@ def apply_suggestions(request: Request, sb_id: int, user: User = Depends(current
 
 
 DEVICE_TEXT = ["designation", "feeds_from", "kind", "manufacturer", "type_code", "poles", "curve", "rcd_type",
-               "circuit_label", "cable", "phase", "source"]
-DEVICE_FLOAT = ["rated_current_a", "breaking_capacity_ka", "residual_ma", "ai_confidence"]
+               "circuit_label", "cable", "phase", "source", "system"]
+DEVICE_FLOAT = ["rated_current_a", "breaking_capacity_ka", "residual_ma", "ai_confidence", "rated_voltage_v", "din_row"]
 
 
 @router.post("/sb/{sb_id}/devices")
@@ -181,6 +182,8 @@ async def save_devices(request: Request, sb_id: int, user: User = Depends(curren
         for f in DEVICE_FLOAT:
             setattr(dev, f, to_float(cols[f][i]) if i < len(cols[f]) else None)
         dev.source = dev.source or "manual"
+        dev.system = "DC" if dev.system == "DC" else "AC"
+        dev.din_row = int(dev.din_row) if dev.din_row else None
         if not (dev.type_code or dev.designation or dev.rated_current_a):
             continue  # prázdný řádek
         sb.devices.append(dev)
@@ -282,14 +285,22 @@ def recognize(request: Request, sb_id: int, user: User = Depends(current_user), 
 
 
 @router.post("/sb/{sb_id}/proposal")
-def apply_proposal(request: Request, sb_id: int, mode: str = Form("replace"), user: User = Depends(current_user),
-                   db: Session = Depends(get_db)):
+async def apply_proposal(request: Request, sb_id: int, user: User = Depends(current_user),
+                         db: Session = Depends(get_db)):
     sb = get_owned(db, Switchboard, sb_id, user)
+    form = await request.form()
+    mode = str(form.get("mode", "replace"))
     devices = (sb.ai_proposal or {}).get("devices") or []
     if not devices:
         flash(request, "Není co převzít.", "error")
         return redirect(f"/sb/{sb.id}#fotky")
-    n = proposal.apply(db, sb, devices, replace=(mode == "replace"))
+    # soustava po lištách potvrzená technikem (AI ji z fotky spolehlivě nepozná)
+    row_systems = {k[len("sys_row_"):]: ("DC" if str(v) == "DC" else "AC")
+                   for k, v in form.items() if k.startswith("sys_row_")}
+    n = proposal.apply(db, sb, devices, replace=(mode == "replace"), row_systems=row_systems)
+    if "DC" in row_systems.values():
+        flash(request, "Rozvaděč má DC část – v části 3 doplňte Uoc max, Isc a počet vstupů, zkontrolujte Ui "
+                       "a druh sestavy (FV DC nad 300 V = výkonový rozvaděč 61439-2).")
     enc_changed = proposal.apply_enclosure(sb, sb.ai_proposal.get("enclosure") or {})
     db.commit()
     msg = f"Převzato {n} přístrojů. Zkontrolujte označení, „napájeno z“ a parametry."
