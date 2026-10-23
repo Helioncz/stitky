@@ -106,6 +106,37 @@ def test_full_flow_and_isolation():
     assert "EF2026" not in other.get("/").text
 
 
+def test_duplicate_series_to_next_serials():
+    c = _client("serie@test.cz")
+    c.post("/settings", data={"name": "Série s.r.o.", "serial_prefix": "S"})
+    sb_id = _new_sb(c)  # S2026-0001
+    c.post(f"/sb/{sb_id}", data={"name": "Rozvodnice RD typ A", "serial_number": "S2026-0003"})  # ručně obsazené číslo
+    c.post(f"/sb/{sb_id}/devices", data={"d_designation": ["-Q1"], "d_kind": ["SWITCH"], "d_type_code": ["IS-40/3"],
+                                         "d_rated_current_a": ["40"]})
+    c.post(f"/sb/{sb_id}/routine-test", data={"test_date": "2026-10-01", "tested_by": "Původní", "r_11.9": "OK",
+                                              "v_11.9": "Riso 800 MΩ", "instrument": "MI 3152"})
+    r = c.post(f"/sb/{sb_id}/copy", data={"count": "3"})
+    # 0002, 0003 je obsazené → přeskočí, 0004, 0005
+    assert "S2026-0002, S2026-0004, S2026-0005" in r.text and "návrhem" in r.text
+    copy_id = int(re.search(r'href="/sb/(\d+)"><b>S2026-0005', r.text).group(1))
+    page = c.get(f"/sb/{copy_id}").text
+    assert "IS-40/3" in page and "kopie z" in page and "S2026-0003" in page
+    assert "Riso 800 MΩ" in page and "Předvyplněný návrh" in page   # hodnoty ze zdroje, ale nepotvrzené
+
+    # série s potvrzenou zkouškou (jiné datum/zkoušející) a vydáním na pozadí
+    r = c.post(f"/sb/{sb_id}/copy", data={"count": "1", "test_date": "2026-10-24", "tested_by": "Štěpán Uherek",
+                                          "test_done": "1", "issue": "1"})
+    new_id = int(re.search(r"/sb/(\d+)", str(r.url)).group(1))
+    import time
+    for _ in range(100):
+        if "🔒" in c.get(f"/sb/{new_id}").text:
+            break
+        time.sleep(0.2)
+    page = c.get(f"/sb/{new_id}").text
+    assert "🔒 rev. 00" in page and "Předvyplněný návrh" not in page
+    assert 'value="Štěpán Uherek"' in page and 'value="2026-10-24"' in page and "Riso 800 MΩ" in page
+
+
 def test_photo_upload_and_delete_draft():
     c = _client("photo@test.cz")
     sb_id = _new_sb(c)

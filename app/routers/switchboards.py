@@ -1,4 +1,5 @@
 """Rozvaděče: seznam, editace, přístroje, fotky + AI, kusová zkouška, vydání a archiv."""
+import copy as copy_module
 import io
 import logging
 import threading
@@ -89,7 +90,7 @@ def dashboard(request: Request, q: str = "", user: User = Depends(current_user),
 @router.post("/sb/new")
 def create(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     tenant = user.tenant
-    sb = Switchboard(tenant_id=tenant.id, serial_number=documents.next_serial(tenant), created_by_id=user.id,
+    sb = Switchboard(tenant_id=tenant.id, serial_number=_free_serial(db, user), created_by_id=user.id,
                      manufacture_date=date.today(), routine_test=routine_test_proposal(db, user))
     db.add(sb)
     db.commit()
@@ -97,21 +98,78 @@ def create(request: Request, user: User = Depends(current_user), db: Session = D
     return redirect(f"/sb/{sb.id}")
 
 
-@router.post("/sb/{sb_id}/copy")
-def copy(request: Request, sb_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    src = get_owned(db, Switchboard, sb_id, user)
-    sb = Switchboard(tenant_id=user.tenant_id, serial_number=documents.next_serial(user.tenant),
-                     created_by_id=user.id, manufacture_date=date.today(), customer_id=src.customer_id)
+MAX_COPIES = 50
+
+
+def _duplicate(db: Session, src: Switchboard, user: User, test_date: str, tested_by: str,
+               test_done: bool) -> Switchboard:
+    """Kopie na další výrobní číslo: vše stejné kromě výr. čísla, data výroby a kusové zkoušky."""
+    sb = Switchboard(tenant_id=user.tenant_id, serial_number=_free_serial(db, user),
+                     created_by_id=user.id, manufacture_date=date.today(), customer_id=src.customer_id,
+                     copied_from_id=src.id)
     for f in TEXT_FIELDS + FLOAT_FIELDS + INT_FIELDS:
         setattr(sb, f, getattr(src, f))
-    sb.routine_test = routine_test_proposal(db, user)
+    src_rt = src.routine_test or {}
+    rt = copy_module.deepcopy(src_rt) if src_rt.get("items") else routine_test_proposal(db, user)
+    rt.update({"test_date": test_date or date.today().isoformat(), "tested_by": tested_by or user.name})
+    # potvrzeno technikem v dialogu duplikace („zkouška provedena“), jinak zůstane návrhem
+    if test_done:
+        rt.pop("prefilled", None)
+    else:
+        rt["prefilled"] = True
+    sb.routine_test = rt
     for d in src.devices:
         sb.devices.append(Device(**{c.key: getattr(d, c.key) for c in Device.__table__.columns
                                     if c.key not in ("id", "switchboard_id")}))
     db.add(sb)
+    db.flush()
+    return sb
+
+
+def _free_serial(db: Session, user: User) -> str:
+    """Další výrobní číslo z řady firmy; ručně obsazená čísla přeskočí."""
+    while True:
+        serial = documents.next_serial(user.tenant)
+        if not db.scalar(select(Switchboard.id).where(Switchboard.tenant_id == user.tenant_id,
+                                                      Switchboard.serial_number == serial)):
+            return serial
+
+
+def _issue_series_job(sb_ids: list[int], user_id: int) -> None:
+    """Na pozadí vygeneruje a zamkne dokumentaci série (PDF trvá pár sekund na kus)."""
+    db = SessionLocal()
+    try:
+        user = db.get(User, user_id)
+        for sb_id in sb_ids:
+            try:
+                documents.issue_revision(db, db.get(Switchboard, sb_id), user, note="série – duplikace")
+            except Exception:  # noqa: BLE001 – jeden kus nesmí zastavit ostatní
+                db.rollback()
+                logger.exception("Vydání dokumentace série selhalo u rozvaděče %s", sb_id)
+    finally:
+        db.close()
+
+
+@router.post("/sb/{sb_id}/copy")
+def copy(request: Request, sb_id: int, count: int = Form(1), test_date: str = Form(""), tested_by: str = Form(""),
+         test_done: str = Form(""), issue: str = Form(""), user: User = Depends(current_user),
+         db: Session = Depends(get_db)):
+    """Duplikace na další výrobní čísla – série stejných rozvaděčů (bez fotek a revizí)."""
+    src = get_owned(db, Switchboard, sb_id, user)
+    count = min(max(count, 1), MAX_COPIES)
+    created = [_duplicate(db, src, user, test_date, tested_by.strip(), bool(test_done)) for _ in range(count)]
     db.commit()
-    flash(request, f"Vytvořena kopie {sb.serial_number} (bez fotek a revizí).")
-    return redirect(f"/sb/{sb.id}")
+    serials = ", ".join(s.serial_number for s in created)
+    msg = f"Vytvořeno {count}× podle {src.serial_number}: {serials}."
+    if issue and test_done:
+        threading.Thread(target=_issue_series_job, args=([s.id for s in created], user.id), daemon=True).start()
+        msg += " Dokumentace se generuje a zamyká na pozadí – za chvíli obnovte seznam (🔒 = hotovo)."
+    elif not test_done:
+        msg += " Kusová zkouška je u kopií návrhem – po provedení ji u každého kusu uložte."
+    flash(request, msg)
+    if count == 1:
+        return redirect(f"/sb/{created[0].id}")
+    return redirect(f"/?q={src.name or src.designation}")
 
 
 @router.post("/sb/{sb_id}/delete")
@@ -139,6 +197,7 @@ def detail(request: Request, sb_id: int, user: User = Depends(current_user), db:
         documents.build_snapshot(sb, user.tenant, open_rev.number)) != open_rev.snapshot.get("data_hash")
     return render(request, "switchboard.html", user=user, sb=sb, a=analysis, customers=_customers(db, user),
                   open_rev=open_rev, stale=stale, ai_running=_recognize_running(sb.ai_proposal), rt=rt,
+                  today=date.today().isoformat(),
                   rt_rows=[(c, t, rt_items.get(c) or {}) for c, t in standards.ROUTINE_TEST_ITEMS],
                   blocking=characteristics.blocking(analysis.warnings),
                   public_url=documents.public_url(sb))

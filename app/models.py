@@ -157,10 +157,12 @@ class Switchboard(Base):
     ai_proposal: Mapped[dict] = mapped_column(JSON, default=dict)
 
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    copied_from_id: Mapped[int | None] = mapped_column(ForeignKey("switchboards.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     customer: Mapped[Customer | None] = relationship()
+    copied_from: Mapped["Switchboard | None"] = relationship(remote_side="Switchboard.id")
     devices: Mapped[list["Device"]] = relationship(
         back_populates="switchboard", cascade="all, delete-orphan", order_by="Device.position"
     )

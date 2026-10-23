@@ -16,10 +16,28 @@
   <h1>{{ sb.serial_number }} · {{ sb.designation }} <span class="muted" style="font-weight:400">{{ sb.name }}</span></h1>
   {% if sb.latest_locked %}<span class="badge ok">🔒 rev. {{ "%02d"|format(sb.latest_locked.number) }}</span>{% endif %}
   {% if open_rev %}<span class="badge ai">rev. {{ "%02d"|format(open_rev.number) }} nezamčena</span>{% elif not sb.revisions %}<span class="badge">koncept</span>{% endif %}
+  {% if sb.copied_from %}<span class="small muted">kopie z <a href="/sb/{{ sb.copied_from.id }}">{{ sb.copied_from.serial_number }}</a></span>{% endif %}
   <span class="spacer"></span>
   <a class="btn" href="/sb/{{ sb.id }}/preview/bundle" target="_blank">Náhled dokumentace</a>
   <a class="btn" href="/sb/{{ sb.id }}/label">🏷 Tisk štítku</a>
-  <form method="post" action="/sb/{{ sb.id }}/copy"><button title="Nový rozvaděč se stejnými údaji a přístroji">Kopírovat</button></form>
+  <details class="dup">
+    <summary class="btn">Duplikovat na další výr. č. ▾</summary>
+    <form method="post" action="/sb/{{ sb.id }}/copy" class="card"
+          onsubmit="return this.count.value == 1 || confirm('Vytvořit ' + this.count.value + ' rozvaděčů na další výrobní čísla?')">
+      <p class="small muted" style="margin-top:0">Kopie má stejné přístroje, schéma, charakteristiky, skříň i zákazníka.
+        Liší se výrobním číslem, datem výroby a kusovou zkouškou. Fotky a revize se nekopírují.</p>
+      <div class="grid">
+        <label>Počet kusů<input type="number" name="count" value="1" min="1" max="50"></label>
+        <label>Datum zkoušky<input type="date" name="test_date" value="{{ today }}"></label>
+        <label>Zkoušel<input name="tested_by" value="{{ user.name }}"></label>
+      </div>
+      <label style="color:var(--ink);margin-top:8px"><input type="checkbox" name="test_done" value="1" style="width:auto">
+        Kusová zkouška provedena – výsledky a naměřené hodnoty převzít z {{ sb.serial_number }}</label>
+      <label style="color:var(--ink)"><input type="checkbox" name="issue" value="1" style="width:auto">
+        Rovnou vygenerovat a zamknout dokumentaci všech kusů (jen se zaškrtnutou zkouškou)</label>
+      <p style="margin-bottom:0"><button class="primary">Vytvořit</button></p>
+    </form>
+  </details>
   {% if not sb.latest_locked %}<form method="post" action="/sb/{{ sb.id }}/delete" onsubmit="return confirm('Smazat koncept rozvaděče?')"><button class="danger">Smazat</button></form>{% endif %}
 </div>
 
