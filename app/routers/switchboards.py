@@ -32,6 +32,29 @@ INT_FIELDS = ["pollution_degree", "width_mm", "height_mm", "depth_mm", "dc_input
 MAX_PHOTO_PX = 2400
 
 
+def routine_test_proposal(db: Session, user: User) -> dict:
+    """Návrh kusové zkoušky: měřák a hodnoty z poslední uložené zkoušky firmy, jinak obvyklé hodnoty.
+
+    Je označený "prefilled" – dokud ho technik neuloží, nejde revizi zamknout.
+    """
+    last = None
+    for sb in db.scalars(select(Switchboard).where(Switchboard.tenant_id == user.tenant_id)
+                         .order_by(Switchboard.updated_at.desc()).limit(30)):
+        rt = sb.routine_test or {}
+        if rt.get("items") and not rt.get("prefilled"):
+            last = rt
+            break
+    last = last or {}
+    last_items = last.get("items") or {}
+    items = {code: {"result": "OK",
+                    "value": (last_items.get(code) or {}).get("value") or standards.ROUTINE_TEST_DEFAULT_VALUES.get(code, "")}
+             for code, _ in standards.ROUTINE_TEST_ITEMS}
+    return {"prefilled": True, "tested_by": user.name, "test_date": date.today().isoformat(),
+            "instrument": last.get("instrument", ""),
+            "insulation_mohm": last.get("insulation_mohm") or standards.ROUTINE_TEST_DEFAULT_INSULATION,
+            "items": items}
+
+
 def _customers(db: Session, user: User) -> list[Customer]:
     return db.scalars(select(Customer).where(Customer.tenant_id == user.tenant_id).order_by(Customer.name)).all()
 
@@ -67,8 +90,7 @@ def dashboard(request: Request, q: str = "", user: User = Depends(current_user),
 def create(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     tenant = user.tenant
     sb = Switchboard(tenant_id=tenant.id, serial_number=documents.next_serial(tenant), created_by_id=user.id,
-                     manufacture_date=date.today(),
-                     routine_test={"tested_by": user.name, "test_date": date.today().isoformat()})
+                     manufacture_date=date.today(), routine_test=routine_test_proposal(db, user))
     db.add(sb)
     db.commit()
     flash(request, f"Založen rozvaděč {sb.serial_number}. Nahrajte fotky nebo zadejte přístroje.")
@@ -82,7 +104,7 @@ def copy(request: Request, sb_id: int, user: User = Depends(current_user), db: S
                      created_by_id=user.id, manufacture_date=date.today(), customer_id=src.customer_id)
     for f in TEXT_FIELDS + FLOAT_FIELDS + INT_FIELDS:
         setattr(sb, f, getattr(src, f))
-    sb.routine_test = {"tested_by": user.name, "test_date": date.today().isoformat()}
+    sb.routine_test = routine_test_proposal(db, user)
     for d in src.devices:
         sb.devices.append(Device(**{c.key: getattr(d, c.key) for c in Device.__table__.columns
                                     if c.key not in ("id", "switchboard_id")}))
@@ -108,12 +130,15 @@ def delete(request: Request, sb_id: int, user: User = Depends(current_user), db:
 def detail(request: Request, sb_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
     sb = get_owned(db, Switchboard, sb_id, user)
     analysis = characteristics.analyze(sb)
-    rt_items = (sb.routine_test or {}).get("items") or {}
+    rt = sb.routine_test or {}
+    if not rt.get("items"):  # starší rozvaděč bez zkoušky – ukážeme návrh (uloží se až tlačítkem)
+        rt = routine_test_proposal(db, user)
+    rt_items = rt.get("items") or {}
     open_rev = sb.open_revision
     stale = bool(open_rev) and documents.data_hash(
         documents.build_snapshot(sb, user.tenant, open_rev.number)) != open_rev.snapshot.get("data_hash")
     return render(request, "switchboard.html", user=user, sb=sb, a=analysis, customers=_customers(db, user),
-                  open_rev=open_rev, stale=stale, ai_running=_recognize_running(sb.ai_proposal),
+                  open_rev=open_rev, stale=stale, ai_running=_recognize_running(sb.ai_proposal), rt=rt,
                   rt_rows=[(c, t, rt_items.get(c) or {}) for c, t in standards.ROUTINE_TEST_ITEMS],
                   blocking=characteristics.blocking(analysis.warnings),
                   public_url=documents.public_url(sb))

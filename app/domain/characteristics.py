@@ -134,6 +134,8 @@ def check(sb, a: Analysis) -> list[str]:
     items = rt.get("items") or {}
     if not rt.get("test_date") or not rt.get("tested_by"):
         w.append("Kusová zkouška: chybí datum nebo jméno zkoušejícího.")
+    if rt.get("prefilled"):
+        w.append("Kusová zkouška je jen předvyplněný návrh – po provedení ji zkontrolujte a uložte (jinak nelze zamknout).")
     nok = [code for code, it in items.items() if (it or {}).get("result") == "NOK"]
     if nok:
         w.append("Kusová zkouška nevyhověla v bodech: " + ", ".join(nok) + " – dokumentaci nelze vydat.")

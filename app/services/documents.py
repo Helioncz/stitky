@@ -189,6 +189,8 @@ def lock_revision(db: Session, rev: Revision, user: User) -> Revision:
     """Zamkne revizi. Odmítne, pokud se údaje rozvaděče od vygenerování změnily."""
     if rev.locked_at:
         raise ValueError(f"Revize {rev.number:02d} už je zamčená.")
+    if (rev.snapshot.get("routine_test") or {}).get("prefilled"):
+        raise ValueError("Kusová zkouška je jen předvyplněný návrh – po provedení ji uložte, vygenerujte znovu a pak zamkněte.")
     sb = rev.switchboard
     current = build_snapshot(sb, user.tenant, rev.number)
     if data_hash(current) != rev.snapshot.get("data_hash"):

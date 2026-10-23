@@ -61,6 +61,20 @@ def main_standard(part: str, override: dict | None = None) -> str:
     return next(s["code"] for s in standards_for(part, override) if "61439-" + part in s["code"])
 
 
+# Obvyklé hodnoty pro předvyplnění kusové zkoušky (návrh – technik je potvrdí uložením)
+ROUTINE_TEST_DEFAULT_VALUES = {
+    "11.2": "vizuálně – kryty, záslepky a těsnění kompletní",
+    "11.3": "vizuálně, dle údajů výrobců přístrojů",
+    "11.4": "spojitost PE < 0,1 Ω",
+    "11.5": "dle návodů výrobců přístrojů",
+    "11.6": "spoje dotaženy momentem dle výrobců",
+    "11.7": "vizuálně, průřezy a značení svorek",
+    "11.8": "ovládání přístrojů, zámků a dveří",
+    "11.9": "Riso > 500 MΩ, 500 V DC",
+    "11.10": "zapojení dle schématu, funkční zkouška, test chráničů",
+}
+ROUTINE_TEST_DEFAULT_INSULATION = "> 500"
+
 # Kusová zkouška dle ČSN EN IEC 61439-1 čl. 11
 ROUTINE_TEST_ITEMS = [
     ("11.2", "Stupeň ochrany krytem (IP)"),

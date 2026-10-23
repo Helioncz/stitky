@@ -41,6 +41,8 @@ def test_full_flow_and_isolation():
     c.post("/settings", data={"name": "Elektro Flow s.r.o.", "street": "Hlavní 1", "city": "Praha", "zip": "11000",
                               "signer_name": "Petr Technik", "signer_position": "jednatel", "serial_prefix": "EF"})
     sb_id = _new_sb(c)
+    page = c.get(f"/sb/{sb_id}").text
+    assert "Předvyplněný návrh" in page and "Riso &gt; 500 MΩ" in page   # kusová zkouška předvyplněna
 
     c.post(f"/sb/{sb_id}/devices", data={
         "d_designation": ["-Q1", "-F1", "-F2", ""], "d_feeds_from": ["", "-Q1", "-F1", ""],
@@ -52,7 +54,14 @@ def test_full_flow_and_isolation():
         "d_phase": ["", "", "L1", ""], "d_source": ["manual"] * 4, "d_ai_confidence": [""] * 4,
     })
     c.post(f"/sb/{sb_id}/suggestions")
-    c.post(f"/sb/{sb_id}/routine-test", data={"test_date": "2026-10-23", "tested_by": "Petr", "r_11.2": "OK"})
+    # s předvyplněnou zkouškou jde vygenerovat, ale ne zamknout
+    c.post(f"/sb/{sb_id}/generate")
+    pre_rev = int(re.search(r'/revision/(\d+)/lock', c.get(f"/sb/{sb_id}").text).group(1))
+    assert "jen předvyplněný návrh" in c.post(f"/revision/{pre_rev}/lock").text
+    c.post(f"/sb/{sb_id}/routine-test", data={"test_date": "2026-10-23", "tested_by": "Petr", "r_11.2": "OK",
+                                              "instrument": "Metrel MI 3152"})
+    # další nový rozvaděč převezme měřák z poslední uložené zkoušky
+    assert "Metrel MI 3152" in c.get(f"/sb/{_new_sb(c)}").text
     page = c.get(f"/sb/{sb_id}").text
     assert "EF2026-0001" in page and "MSO-32-3" in page
 

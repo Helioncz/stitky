@@ -228,9 +228,12 @@
 </section>
 
 {# ── 4. Kusová zkouška ───────────────────────────────────── #}
-{% set rt = sb.routine_test or {} %}
 <section class="card" id="zkouska">
   <h2>4 · Kusová zkouška (ČSN EN IEC 61439-1 čl. 11)</h2>
+  {% if rt.prefilled %}
+  <div class="flash" style="background:#fff1dc;color:var(--warn)">Předvyplněný návrh (měřák a hodnoty z poslední zkoušky). Po provedení zkoušky hodnoty
+    zkontrolujte a <b>uložte</b> – do té doby nelze revizi zamknout.</div>
+  {% endif %}
   <form method="post" action="/sb/{{ sb.id }}/routine-test">
     <div class="grid">
       {{ inp("test_date", "Datum zkoušky", rt.test_date, "date") }}
